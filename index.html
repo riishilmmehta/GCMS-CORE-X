@@ -7,12 +7,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
     </script>
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.110/Build/Cesium/Cesium.js">
-    </script>
-    <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.110/Build/Cesium/Widgets/widgets.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js">
-    </script>
-
     <style>
         /* ── RESET & BASE ── */
         :root {
@@ -134,28 +128,28 @@
             z-index: 100;
             opacity: 0;
             visibility: hidden;
-            transition: opacity 1s ease, visibility 1s;
+            transition: opacity 1.5s ease, visibility 1.5s;
             cursor: pointer;
-            /* ensure the whole area is clickable */
             pointer-events: auto;
+            background: var(--bg-deep);
         }
         #cinematic-view.active {
             opacity: 1;
             visibility: visible;
         }
 
-        /* ★ FIX: completely disable pointer events on Cesium and all its children */
-        #cesium-cinematic,
-        #cesium-cinematic * {
-            pointer-events: none !important;
-        }
-
-        #cesium-cinematic {
+        #three-cinematic {
             position: absolute;
             inset: 0;
             z-index: 1;
-            width: 100%;   /* FIX: give explicit size */
-            height: 100%;  /* FIX: give explicit size */
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-cinematic canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
         }
 
         .cinematic-vignette {
@@ -163,9 +157,37 @@
             inset: 0;
             z-index: 2;
             background:
-                radial-gradient(ellipse at center bottom, transparent 0%, transparent 40%, var(--bg-deep) 85%),
-                linear-gradient(to bottom, var(--bg-deep) 0%, transparent 35%, transparent 65%, var(--bg-deep) 100%);
+                radial-gradient(ellipse at 50% 80%, transparent 0%, transparent 50%, rgba(10, 10, 26, 0.85) 90%),
+                radial-gradient(ellipse at 50% 20%, transparent 0%, transparent 40%, rgba(10, 10, 26, 0.4) 80%),
+                linear-gradient(to bottom, rgba(10, 10, 26, 0.3) 0%, transparent 30%, transparent 70%, rgba(10, 10, 26, 0.7) 100%);
             pointer-events: none;
+        }
+
+        .cinematic-stars {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .cinematic-stars span {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0;
+            animation: twinkle var(--duration) ease-in-out infinite alternate;
+        }
+        @keyframes twinkle {
+            0% {
+                opacity: 0.1;
+                transform: scale(0.5);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
         }
 
         .cinematic-ui {
@@ -176,37 +198,36 @@
             flex-direction: column;
             align-items: center;
             justify-content: flex-start;
-            padding-top: 15vh;
+            padding-top: 12vh;
             pointer-events: none;
-            /* let clicks pass through to parent */;
         }
 
         .cinematic-brand {
             font-family: 'Orbitron', sans-serif;
-            font-size: clamp(1.5rem, 5vw, 3rem);
+            font-size: clamp(1.8rem, 6vw, 3.5rem);
             font-weight: 700;
             letter-spacing: 0.2em;
             color: var(--text-primary);
-            text-shadow: 0 0 40px var(--accent-glow);
+            text-shadow: 0 0 40px var(--accent-glow), 0 0 80px rgba(129, 140, 248, 0.15);
             opacity: 0;
             transform: translateY(20px);
-            animation: fadeInUp 1s ease 0.5s forwards;
+            animation: fadeInUp 1.2s ease 0.5s forwards;
         }
 
         .cinematic-tagline {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: clamp(0.7rem, 2vw, 0.9rem);
+            font-size: clamp(0.7rem, 2vw, 0.95rem);
             color: var(--text-secondary);
-            letter-spacing: 0.4em;
+            letter-spacing: 0.5em;
             text-transform: uppercase;
-            margin-top: 1rem;
+            margin-top: 0.75rem;
             opacity: 0;
-            animation: fadeInUp 1s ease 0.8s forwards;
+            animation: fadeInUp 1.2s ease 0.9s forwards;
         }
 
         .cinematic-hint {
             position: absolute;
-            bottom: 8vh;
+            bottom: 10vh;
             left: 50%;
             transform: translateX(-50%);
             display: flex;
@@ -214,35 +235,63 @@
             align-items: center;
             gap: 0.75rem;
             opacity: 0;
-            animation: fadeInUp 1s ease 1.5s forwards;
+            animation: fadeInUp 1.2s ease 1.6s forwards;
             pointer-events: none;
-            /* still doesn't block clicks */;
         }
 
         .hint-pulse {
-            width: 48px;
-            height: 48px;
+            width: 56px;
+            height: 56px;
             border-radius: 50%;
-            border: 1px solid var(--accent);
+            border: 1.5px solid var(--accent);
             position: relative;
-            animation: pulseRing 2s ease-out infinite;
+            animation: pulseRing 2.4s ease-out infinite;
+            box-shadow: 0 0 30px rgba(129, 140, 248, 0.15);
         }
         .hint-pulse::after {
             content: '';
             position: absolute;
-            inset: 12px;
+            inset: 14px;
             border-radius: 50%;
             background: var(--accent);
-            opacity: 0.6;
-            animation: pulseCore 2s ease-out infinite;
+            opacity: 0.5;
+            animation: pulseCore 2.4s ease-out infinite;
+            box-shadow: 0 0 20px var(--accent-glow);
         }
 
         .hint-text {
             font-family: 'Space Grotesk', sans-serif;
             font-size: 0.75rem;
-            letter-spacing: 0.2em;
+            letter-spacing: 0.25em;
             color: var(--accent);
             text-transform: uppercase;
+            font-weight: 500;
+        }
+
+        .cinematic-glow-ring {
+            position: absolute;
+            bottom: 5%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 70vw;
+            max-width: 700px;
+            height: 40px;
+            z-index: 2;
+            pointer-events: none;
+            background: radial-gradient(ellipse at center, rgba(129, 140, 248, 0.08) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(20px);
+            animation: glowPulse 3s ease-in-out infinite alternate;
+        }
+        @keyframes glowPulse {
+            0% {
+                opacity: 0.3;
+                transform: translateX(-50%) scale(1);
+            }
+            100% {
+                opacity: 0.8;
+                transform: translateX(-50%) scale(1.2);
+            }
         }
 
         /* ── DASHBOARD ── */
@@ -262,6 +311,10 @@
             gap: 1px;
             background: var(--bg-deep);
         }
+        #dashboard.active {
+            opacity: 1;
+            visibility: visible;
+        }
 
         @media (max-width: 1024px) {
             #dashboard {
@@ -275,11 +328,6 @@
             }
         }
 
-        #dashboard.active {
-            opacity: 1;
-            visibility: visible;
-        }
-
         .glass-panel {
             background: var(--glass);
             backdrop-filter: blur(20px);
@@ -287,16 +335,20 @@
             border: 1px solid var(--glass-border);
             border-radius: 12px;
             overflow: hidden;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .glass-panel:hover {
+            border-color: rgba(129, 140, 248, 0.2);
+            box-shadow: 0 0 30px rgba(129, 140, 248, 0.03);
         }
 
-        /* HEADER */
         .dash-header {
             grid-area: header;
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 0 1.5rem;
-            background: rgba(10, 10, 26, 0.8);
+            background: rgba(10, 10, 26, 0.85);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--glass-border);
             z-index: 10;
@@ -312,34 +364,63 @@
             align-items: center;
             gap: 0.75rem;
         }
+        .header-brand .brand-icon {
+            color: var(--accent);
+            animation: pulseIcon 2s ease-in-out infinite;
+        }
+        @keyframes pulseIcon {
+            0%,
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.6;
+                transform: scale(0.9);
+            }
+        }
 
         .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
             background: var(--low);
-            box-shadow: 0 0 8px var(--low);
+            box-shadow: 0 0 12px var(--low);
             animation: blink 2s ease infinite;
         }
 
         .header-meta {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             color: var(--text-muted);
             display: flex;
+            align-items: center;
             gap: 1.5rem;
         }
+        .header-meta .live-badge {
+            color: var(--low);
+            font-weight: 600;
+            letter-spacing: 0.1em;
+        }
 
-        /* GLOBE AREA */
         .globe-area {
             grid-area: globe;
             position: relative;
             overflow: hidden;
         }
 
-        #cesium-full {
+        #three-full {
             position: absolute;
             inset: 0;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
+        }
+
+        #three-full canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
         }
 
         .globe-overlay {
@@ -347,10 +428,9 @@
             inset: 0;
             z-index: 2;
             pointer-events: none;
-            background: radial-gradient(circle at center, transparent 50%, var(--bg-deep) 100%);
+            background: radial-gradient(circle at center, transparent 40%, var(--bg-deep) 100%);
         }
 
-        /* SIDEBARS */
         .sidebar-left {
             grid-area: left;
             padding: 1rem;
@@ -376,18 +456,11 @@
             .sidebar-right {
                 display: none;
             }
-            .mobile-panels {
-                grid-area: panels;
-                padding: 1rem;
-                display: flex;
-                flex-direction: column;
-                gap: 1rem;
-            }
         }
 
         .panel-title {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             font-weight: 600;
             letter-spacing: 0.15em;
             text-transform: uppercase;
@@ -417,35 +490,51 @@
             background: var(--glass-highlight);
             border: 1px solid var(--glass-border);
             border-radius: 8px;
-            padding: 1rem;
+            padding: 0.9rem 0.6rem;
             text-align: center;
-            transition: transform 0.2s, border-color 0.2s;
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s, box-shadow 0.3s;
+            cursor: default;
         }
         .stat-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
             border-color: var(--accent);
+            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.06);
         }
 
         .stat-value {
             font-family: 'Orbitron', sans-serif;
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             font-weight: 700;
             color: var(--text-primary);
+            transition: color 0.3s;
         }
         .stat-value.critical {
             color: var(--critical);
-            text-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+            text-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
         }
         .stat-value.high {
             color: var(--high);
+            text-shadow: 0 0 20px rgba(251, 146, 60, 0.2);
+        }
+        .stat-value.glow {
+            animation: statPulse 2s ease-in-out infinite;
+        }
+        @keyframes statPulse {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.7;
+            }
         }
 
         .stat-label {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            margin-top: 0.25rem;
+            margin-top: 0.2rem;
         }
 
         .event-list {
@@ -460,12 +549,26 @@
             border-radius: 8px;
             padding: 0.75rem;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             border-left: 3px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+        .event-item::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.02));
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .event-item:hover::before {
+            opacity: 1;
         }
         .event-item:hover {
             background: var(--glass-highlight);
-            border-color: var(--accent);
+            border-color: rgba(129, 140, 248, 0.2);
+            transform: translateX(4px);
         }
         .event-item.critical {
             border-left-color: var(--critical);
@@ -484,7 +587,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2rem;
         }
 
         .event-title {
@@ -492,15 +595,20 @@
             font-size: 0.8rem;
             font-weight: 600;
             color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 70%;
         }
 
         .event-severity {
-            font-size: 0.6rem;
-            padding: 0.15rem 0.4rem;
+            font-size: 0.55rem;
+            padding: 0.1rem 0.5rem;
             border-radius: 4px;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
+            flex-shrink: 0;
         }
         .severity-badge-critical {
             background: rgba(239, 68, 68, 0.15);
@@ -520,51 +628,59 @@
         }
 
         .event-meta {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: var(--text-muted);
             display: flex;
-            gap: 0.75rem;
-            margin-top: 0.25rem;
+            gap: 0.6rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .event-meta .dot {
+            color: var(--glass-border);
         }
 
         .news-feed {
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.6rem;
         }
 
         .news-item {
-            padding: 0.75rem;
+            padding: 0.7rem 0.8rem;
             border-radius: 8px;
             background: var(--glass);
             border: 1px solid var(--glass-border);
-            transition: all 0.2s;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: default;
         }
         .news-item:hover {
-            border-color: var(--accent);
+            border-color: rgba(129, 140, 248, 0.2);
+            transform: translateX(3px);
+            background: var(--glass-highlight);
         }
 
         .news-source {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--accent);
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            margin-bottom: 0.25rem;
+            font-weight: 600;
         }
         .news-title {
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             color: var(--text-primary);
             line-height: 1.4;
             font-weight: 500;
+            margin-top: 0.1rem;
         }
         .news-time {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             color: var(--text-muted);
             margin-top: 0.25rem;
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* TOAST */
+        /* ── TOASTS ── */
         #toast-container {
             position: fixed;
             top: 80px;
@@ -574,42 +690,45 @@
             flex-direction: column;
             gap: 0.75rem;
             pointer-events: none;
+            max-width: 420px;
+            width: calc(100% - 40px);
         }
 
         .toast {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
+            background: rgba(10, 10, 26, 0.85);
+            backdrop-filter: blur(24px);
             border: 1px solid var(--glass-border);
-            border-left: 3px solid var(--critical);
-            border-radius: 8px;
+            border-left: 4px solid var(--critical);
+            border-radius: 10px;
             padding: 1rem 1.25rem;
-            min-width: 300px;
-            max-width: 400px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(239, 68, 68, 0.1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(239, 68, 68, 0.05);
             transform: translateX(120%);
-            animation: slideInToast 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: slideInToast 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             pointer-events: all;
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .toast:hover {
+            transform: translateX(-4px) !important;
+        }
+        .toast.removing {
+            animation: slideOutToast 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
 
         .toast-header {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2rem;
         }
-
         .toast-icon {
-            font-size: 1rem;
+            font-size: 1.1rem;
         }
-
         .toast-label {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             text-transform: uppercase;
             letter-spacing: 0.15em;
-            color: var(--critical);
-            font-weight: 700;
+            font-weight: 800;
         }
-
         .toast-title {
             font-family: 'Space Grotesk', sans-serif;
             font-size: 0.9rem;
@@ -617,65 +736,65 @@
             color: var(--text-primary);
             line-height: 1.3;
         }
-
         .toast-meta {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: var(--text-muted);
-            margin-top: 0.5rem;
+            margin-top: 0.4rem;
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* ANIMATIONS */
+        /* ── KEYFRAMES ── */
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(24px);
             }
             to {
                 opacity: 1;
                 transform: translateY(0);
             }
         }
-
         @keyframes pulseRing {
             0% {
                 transform: scale(1);
                 opacity: 1;
             }
             100% {
-                transform: scale(1.6);
+                transform: scale(1.7);
                 opacity: 0;
             }
         }
-
         @keyframes pulseCore {
             0%,
             100% {
                 transform: scale(1);
-                opacity: 0.6;
+                opacity: 0.5;
             }
             50% {
                 transform: scale(0.8);
                 opacity: 1;
             }
         }
-
         @keyframes blink {
             0%,
             100% {
                 opacity: 1;
             }
             50% {
-                opacity: 0.4;
+                opacity: 0.3;
             }
         }
-
         @keyframes slideInToast {
             to {
                 transform: translateX(0);
             }
         }
-
+        @keyframes slideOutToast {
+            to {
+                transform: translateX(120%);
+                opacity: 0;
+            }
+        }
         @keyframes fadeOut {
             to {
                 opacity: 0;
@@ -683,7 +802,6 @@
             }
         }
 
-        /* SCROLLBAR */
         ::-webkit-scrollbar {
             width: 4px;
         }
@@ -700,6 +818,25 @@
 
         .hidden {
             display: none !important;
+        }
+
+        /* ── RESPONSIVE TWEAKS ── */
+        @media (max-width: 768px) {
+            .dash-header {
+                padding: 0 0.75rem;
+                flex-wrap: wrap;
+                gap: 0.25rem;
+            }
+            .header-brand {
+                font-size: 0.9rem;
+            }
+            .header-meta {
+                font-size: 0.6rem;
+                gap: 0.75rem;
+            }
+            .header-meta .live-badge {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -720,8 +857,10 @@
 
     <!-- CINEMATIC VIEW -->
     <div id="cinematic-view">
-        <div id="cesium-cinematic"></div>
+        <div id="three-cinematic"></div>
+        <div class="cinematic-stars" id="cinematic-stars"></div>
         <div class="cinematic-vignette"></div>
+        <div class="cinematic-glow-ring"></div>
         <div class="cinematic-ui">
             <div class="cinematic-brand">GCMS CORE X</div>
             <div class="cinematic-tagline">Real-time Global Crisis Intelligence</div>
@@ -736,11 +875,11 @@
     <div id="dashboard">
         <div class="dash-header">
             <div class="header-brand">
-                <span style="color: var(--accent);">◆</span> GCMS CORE X
+                <span class="brand-icon">◆</span> GCMS CORE X
             </div>
             <div class="header-meta">
                 <span class="status-dot"></span>
-                <span>LIVE FEED ACTIVE</span>
+                <span class="live-badge">● LIVE</span>
                 <span id="clock">00:00:00 UTC</span>
             </div>
         </div>
@@ -750,11 +889,11 @@
                 <div class="panel-title">Crisis Overview</div>
                 <div class="stat-grid">
                     <div class="stat-card">
-                        <div class="stat-value critical" id="stat-active">0</div>
+                        <div class="stat-value critical glow" id="stat-active">0</div>
                         <div class="stat-label">Active Events</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value high" id="stat-alerts">0</div>
+                        <div class="stat-value high glow" id="stat-alerts">0</div>
                         <div class="stat-label">Alerts</div>
                     </div>
                     <div class="stat-card">
@@ -770,30 +909,24 @@
 
             <div class="glass-panel" style="padding: 1rem; flex: 1; min-height: 0;">
                 <div class="panel-title">Recent Events</div>
-                <div class="event-list" id="event-list">
-                    <!-- Events injected here -->
-                </div>
+                <div class="event-list" id="event-list"></div>
             </div>
         </div>
 
         <div class="globe-area">
-            <div id="cesium-full"></div>
+            <div id="three-full"></div>
             <div class="globe-overlay"></div>
         </div>
 
         <div class="sidebar-right">
             <div class="glass-panel" style="padding: 1rem;">
                 <div class="panel-title">Latest Alerts</div>
-                <div class="event-list" id="alert-list">
-                    <!-- Alerts injected here -->
-                </div>
+                <div class="event-list" id="alert-list"></div>
             </div>
 
             <div class="glass-panel" style="padding: 1rem; flex: 1;">
                 <div class="panel-title">Crisis News</div>
-                <div class="news-feed" id="news-feed">
-                    <!-- News injected here -->
-                </div>
+                <div class="news-feed" id="news-feed"></div>
             </div>
         </div>
     </div>
@@ -805,11 +938,11 @@
         // ==========================================
         // GLOBAL STATE
         // ==========================================
-        window.CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.110/Build/Cesium';
         let crisisData = { earthquakes: [], disasters: [], news: [] };
-        let cinematicViewer = null;
-        let fullViewer = null;
+        let cinematicScene = null; // THREE.Scene for cinematic
+        let fullScene = null; // THREE.Scene for dashboard
         let isExpanded = false;
+        let cinematicRotationId = null;
 
         // ==========================================
         // UTILITIES
@@ -847,40 +980,69 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-            // Wireframe globe
             const geometry = new THREE.IcosahedronGeometry(2, 2);
             const wireframe = new THREE.WireframeGeometry(geometry);
-            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.3 });
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.35 });
             const globe = new THREE.LineSegments(wireframe, lineMaterial);
             scene.add(globe);
 
-            // Inner core
             const coreGeo = new THREE.IcosahedronGeometry(1.9, 1);
-            const coreMat = new THREE.MeshBasicMaterial({ color: 0x4f46e5, wireframe: true, transparent: true, opacity: 0.15 });
+            const coreMat = new THREE.MeshBasicMaterial({ color: 0x4f46e5, wireframe: true, transparent: true, opacity: 0.12 });
             const core = new THREE.Mesh(coreGeo, coreMat);
             scene.add(core);
 
-            // Particles
+            const glowGeo = new THREE.SphereGeometry(1.85, 32, 32);
+            const glowMat = new THREE.MeshBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.04 });
+            const glowSphere = new THREE.Mesh(glowGeo, glowMat);
+            scene.add(glowSphere);
+
             const particlesGeo = new THREE.BufferGeometry();
-            const particleCount = 1500;
+            const particleCount = 2000;
             const posArray = new Float32Array(particleCount * 3);
             for (let i = 0; i < particleCount * 3; i++) {
-                posArray[i] = (Math.random() - 0.5) * 15;
+                posArray[i] = (Math.random() - 0.5) * 18;
             }
             particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-            const particlesMat = new THREE.PointsMaterial({ size: 0.02, color: 0x818cf8, transparent: true, opacity: 0.6 });
+            const particlesMat = new THREE.PointsMaterial({
+                size: 0.025,
+                color: 0x818cf8,
+                transparent: true,
+                opacity: 0.5,
+                blending: THREE.AdditiveBlending
+            });
             const particles = new THREE.Points(particlesGeo, particlesMat);
             scene.add(particles);
 
-            camera.position.z = 5;
+            const starGeo = new THREE.BufferGeometry();
+            const starCount = 800;
+            const starPos = new Float32Array(starCount * 3);
+            for (let i = 0; i < starCount * 3; i++) {
+                starPos[i] = (Math.random() - 0.5) * 30;
+            }
+            starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+            const starMat = new THREE.PointsMaterial({
+                size: 0.015,
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.3,
+                blending: THREE.AdditiveBlending
+            });
+            const stars = new THREE.Points(starGeo, starMat);
+            scene.add(stars);
+
+            camera.position.z = 5.5;
 
             function animate() {
                 if (!$('loader').classList.contains('hidden')) {
-                    globe.rotation.y += 0.003;
-                    globe.rotation.x += 0.001;
-                    core.rotation.y -= 0.002;
+                    const t = Date.now() * 0.001;
+                    globe.rotation.y += 0.004;
+                    globe.rotation.x += 0.0015;
+                    core.rotation.y -= 0.003;
                     core.rotation.z += 0.001;
-                    particles.rotation.y += 0.0005;
+                    glowSphere.rotation.y += 0.002;
+                    particles.rotation.y += 0.0006;
+                    stars.rotation.y += 0.0003;
+                    glowSphere.material.opacity = 0.03 + 0.025 * Math.sin(t * 0.5);
                     renderer.render(scene, camera);
                     requestAnimationFrame(animate);
                 }
@@ -901,7 +1063,7 @@
             const results = { earthquakes: [], disasters: [], news: [] };
 
             try {
-                updateLoader(30, 'Connecting to USGS seismic network...');
+                updateLoader(25, 'Connecting to USGS seismic network...');
                 const usgsRes = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson');
                 const usgs = await usgsRes.json();
                 results.earthquakes = usgs.features || [];
@@ -910,7 +1072,7 @@
             await sleep(400);
 
             try {
-                updateLoader(60, 'Syncing ReliefWeb humanitarian feeds...');
+                updateLoader(55, 'Syncing ReliefWeb humanitarian feeds...');
                 const reliefRes = await fetch('https://api.reliefweb.int/v1/disasters?appname=gcms-core-x&limit=6&profile=full&preset=latest&fields[include]=name,country,date,status,type');
                 const relief = await reliefRes.json();
                 results.disasters = relief.data || [];
@@ -919,7 +1081,7 @@
             await sleep(400);
 
             try {
-                updateLoader(85, 'Pulling GDELT conflict indicators...');
+                updateLoader(80, 'Pulling GDELT conflict indicators...');
                 const gdeltRes = await fetch('https://api.gdeltproject.org/api/v2/geo/geo?query=conflict&format=GeoJSON&timespan=1d');
                 const gdelt = await gdeltRes.json();
                 results.news = gdelt.features || [];
@@ -935,130 +1097,316 @@
         }
 
         // ==========================================
-        // CESIUM SETUP
+        // CINEMATIC STARS (CSS)
         // ==========================================
-        function createViewer(containerId, options = {}) {
-            return new Cesium.Viewer(containerId, {
-                imageryProvider: new Cesium.UrlTemplateImageryProvider({
-                    url: 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    maximumLevel: 18
-                }),
-                terrainProvider: new Cesium.EllipsoidTerrainProvider(),
-                baseLayerPicker: false,
-                geocoder: false,
-                homeButton: false,
-                sceneModePicker: false,
-                navigationHelpButton: false,
-                animation: false,
-                timeline: false,
-                fullscreenButton: false,
-                vrButton: false,
-                creditContainer: null,
-                skyAtmosphere: true,
-                ...options
-            });
+        function generateCinematicStars() {
+            const container = $('cinematic-stars');
+            const count = 120;
+            for (let i = 0; i < count; i++) {
+                const span = document.createElement('span');
+                const x = Math.random() * 100;
+                const y = Math.random() * 100;
+                const size = 1 + Math.random() * 2.5;
+                const duration = 2 + Math.random() * 4;
+                const delay = Math.random() * 3;
+                span.style.cssText = `
+                        left: ${x}%;
+                        top: ${y}%;
+                        width: ${size}px;
+                        height: ${size}px;
+                        --duration: ${duration}s;
+                        animation-delay: ${delay}s;
+                        opacity: ${0.2 + Math.random() * 0.5};
+                    `;
+                container.appendChild(span);
+            }
         }
 
+        // ==========================================
+        // THREE.JS GLOBE CREATOR
+        // ==========================================
+        function createThreeGlobe(containerId, options = {}) {
+            const container = document.getElementById(containerId);
+            if (!container) {
+                console.error('Container not found:', containerId);
+                return null;
+            }
+
+            // Remove any existing canvas
+            const existingCanvas = container.querySelector('canvas');
+            if (existingCanvas) {
+                existingCanvas.remove();
+            }
+
+            // Setup scene
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // Stars background (particles)
+            const starsGeo = new THREE.BufferGeometry();
+            const starsCount = 2000;
+            const starsPos = new Float32Array(starsCount * 3);
+            for (let i = 0; i < starsCount * 3; i++) {
+                starsPos[i] = (Math.random() - 0.5) * 200;
+            }
+            starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
+            const starsMat = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.15,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending
+            });
+            const stars = new THREE.Points(starsGeo, starsMat);
+            scene.add(stars);
+
+            // Earth group
+            const earthGroup = new THREE.Group();
+            scene.add(earthGroup);
+
+            // Earth sphere
+            const earthGeo = new THREE.SphereGeometry(1, 64, 64);
+            const textureLoader = new THREE.TextureLoader();
+            // Use a reliable Earth texture (Blue Marble from NASA)
+            const textureUrl = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+            // Fallback if texture fails
+            const earthMat = new THREE.MeshPhongMaterial({
+                map: textureLoader.load(textureUrl),
+                shininess: 5,
+                emissive: new THREE.Color(0x000022),
+                emissiveIntensity: 0.1
+            });
+            const earth = new THREE.Mesh(earthGeo, earthMat);
+            earthGroup.add(earth);
+
+            // Atmosphere glow (slightly larger sphere with transparency)
+            const glowGeo2 = new THREE.SphereGeometry(1.02, 64, 64);
+            const glowMat2 = new THREE.MeshPhongMaterial({
+                color: 0x4f46e5,
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.BackSide,
+                blending: THREE.AdditiveBlending
+            });
+            const glowMesh = new THREE.Mesh(glowGeo2, glowMat2);
+            earthGroup.add(glowMesh);
+
+            // Outer glow ring (like a halo)
+            const ringGeo = new THREE.RingGeometry(1.08, 1.2, 64);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: 0x818cf8,
+                transparent: true,
+                opacity: 0.08,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            ring.rotation.x = Math.PI / 2;
+            earthGroup.add(ring);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404060);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            dirLight.position.set(5, 3, 5);
+            scene.add(dirLight);
+            const backLight = new THREE.DirectionalLight(0x8888ff, 0.4);
+            backLight.position.set(-5, -1, -5);
+            scene.add(backLight);
+
+            // Camera position
+            const defaultPos = options.position || { lat: 20, lon: 0, distance: 2.8 };
+            // Convert lat/lon to Cartesian
+            const phi = (90 - defaultPos.lat) * Math.PI / 180;
+            const theta = defaultPos.lon * Math.PI / 180;
+            camera.position.set(
+                defaultPos.distance * Math.sin(phi) * Math.cos(theta),
+                defaultPos.distance * Math.cos(phi),
+                defaultPos.distance * Math.sin(phi) * Math.sin(theta)
+            );
+            camera.lookAt(0, 0, 0);
+
+            // Store references
+            const globeData = {
+                scene,
+                camera,
+                renderer,
+                earthGroup,
+                earth,
+                glowMesh,
+                ring,
+                container,
+                markers: []
+            };
+
+            // Resize handler
+            function resize() {
+                const w = container.clientWidth;
+                const h = container.clientHeight;
+                if (w > 0 && h > 0) {
+                    camera.aspect = w / h;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(w, h);
+                }
+            }
+            window.addEventListener('resize', resize);
+            globeData._resizeHandler = resize;
+
+            // Initial resize
+            setTimeout(resize, 100);
+
+            // Animation loop
+            let rotationSpeed = options.rotationSpeed || 0.002;
+            let lastTime = 0;
+
+            function animate(time) {
+                if (!globeData._active) return;
+                requestAnimationFrame(animate);
+
+                const delta = time - lastTime;
+                lastTime = time;
+
+                // Rotate earth group
+                earthGroup.rotation.y += rotationSpeed;
+                // Slight wobble for ring
+                ring.rotation.z = Math.sin(time * 0.0005) * 0.02;
+
+                // Update marker pulsing
+                globeData.markers.forEach((marker, idx) => {
+                    if (marker.material) {
+                        const pulse = 0.6 + 0.4 * Math.sin(time * 0.003 + idx);
+                        marker.material.opacity = pulse;
+                        marker.scale.setScalar(0.8 + 0.4 * pulse);
+                    }
+                });
+
+                renderer.render(scene, camera);
+            }
+
+            globeData._active = true;
+            animate(0);
+
+            // Add method to add markers
+            globeData.addMarkers = function(points) {
+                points.forEach(p => {
+                    const lat = p.lat;
+                    const lon = p.lon;
+                    const color = p.color || '#ff4444';
+                    const size = p.size || 0.04;
+                    const label = p.label || '';
+
+                    // Convert lat/lon to position on sphere
+                    const phi = (90 - lat) * Math.PI / 180;
+                    const theta = lon * Math.PI / 180;
+                    const r = 1.02; // slightly above surface
+                    const x = r * Math.sin(phi) * Math.cos(theta);
+                    const y = r * Math.cos(phi);
+                    const z = r * Math.sin(phi) * Math.sin(theta);
+
+                    // Create a glowing point
+                    const markerGroup = new THREE.Group();
+
+                    // Core dot
+                    const dotGeo = new THREE.SphereGeometry(size, 8, 8);
+                    const dotMat = new THREE.MeshBasicMaterial({ color: color });
+                    const dot = new THREE.Mesh(dotGeo, dotMat);
+                    markerGroup.add(dot);
+
+                    // Glow ring around marker
+                    const ringGeo2 = new THREE.RingGeometry(size * 1.5, size * 2.5, 16);
+                    const ringMat2 = new THREE.MeshBasicMaterial({
+                        color: color,
+                        transparent: true,
+                        opacity: 0.5,
+                        side: THREE.DoubleSide,
+                        depthWrite: false
+                    });
+                    const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
+                    ring2.lookAt(0, 0, 0); // face outward
+                    markerGroup.add(ring2);
+
+                    // Store material for pulse animation
+                    markerGroup.material = ringMat2;
+                    markerGroup.scale.setScalar(1);
+
+                    markerGroup.position.set(x, y, z);
+                    globeData.earthGroup.add(markerGroup);
+                    globeData.markers.push(markerGroup);
+
+                    // Add label as sprite? Could use canvas texture, but skip for simplicity.
+                });
+            };
+
+            return globeData;
+        }
+
+        // ==========================================
+        // INIT GLOBES
+        // ==========================================
         function initCinematicGlobe() {
-            const skyAtmosphere = new Cesium.SkyAtmosphere();
-            skyAtmosphere.hueShift = 0.1;
-            skyAtmosphere.saturationShift = 0.2;
-            skyAtmosphere.brightnessShift = 0.1;
-
-            cinematicViewer = createViewer('cesium-cinematic', {
-                skyBox: false,
-                skyAtmosphere: skyAtmosphere
+            cinematicScene = createThreeGlobe('three-cinematic', {
+                position: { lat: -25, lon: 10, distance: 2.8 },
+                rotationSpeed: 0.0015
             });
-
-            // Dark blue space background
-            cinematicViewer.scene.backgroundColor = new Cesium.Color(0.04, 0.04, 0.1, 1);
-
-            // Position for "half globe" cinematic look — camera looking from below/angle
-            cinematicViewer.camera.setView({
-                destination: Cesium.Cartesian3.fromDegrees(0, -30, 22000000),
-                orientation: {
-                    heading: Cesium.Math.toRadians(0),
-                    pitch: Cesium.Math.toRadians(-75),
-                    roll: 0
-                }
-            });
-
-            // Slow rotation
-            cinematicViewer.clock.onTick.addEventListener(() => {
-                if (!isExpanded && cinematicViewer) {
-                    cinematicViewer.scene.camera.rotate(Cesium.Cartesian3.UNIT_Z, 0.0003);
-                }
-            });
-
-            // FIX: resize after container is rendered
-            setTimeout(() => {
-                if (cinematicViewer) {
-                    cinematicViewer.resize();
-                }
-            }, 100);
+            if (!cinematicScene) {
+                console.error('Cinematic globe creation failed');
+                return;
+            }
+            // Add some sample markers? We'll add after data loads.
         }
 
         function initFullGlobe() {
-            fullViewer = createViewer('cesium-full', {
-                skyBox: false
-            });
-            fullViewer.scene.backgroundColor = new Cesium.Color(0.04, 0.04, 0.1, 1);
-
-            fullViewer.camera.setView({
-                destination: Cesium.Cartesian3.fromDegrees(0, 15, 18000000),
-                orientation: {
-                    heading: 0,
-                    pitch: Cesium.Math.toRadians(-45),
-                    roll: 0
+            if (fullScene) {
+                fullScene._active = false;
+                // Cleanup
+                if (fullScene._resizeHandler) {
+                    window.removeEventListener('resize', fullScene._resizeHandler);
                 }
-            });
+                const container = document.getElementById('three-full');
+                if (container) {
+                    const canvas = container.querySelector('canvas');
+                    if (canvas) canvas.remove();
+                }
+                fullScene = null;
+            }
 
-            // Add event markers
-            addEventMarkers(fullViewer);
+            fullScene = createThreeGlobe('three-full', {
+                position: { lat: 20, lon: 0, distance: 2.5 },
+                rotationSpeed: 0.001
+            });
+            if (!fullScene) {
+                console.error('Dashboard globe creation failed');
+                return;
+            }
+
+            // Add markers from earthquake data
+            if (crisisData.earthquakes.length > 0) {
+                addMarkersToGlobe(fullScene);
+            }
         }
 
-        function addEventMarkers(viewer) {
-            crisisData.earthquakes.slice(0, 20).forEach(eq => {
-                const [lon, lat, depth] = eq.geometry.coordinates;
-                const mag = eq.properties.mag;
+        function addMarkersToGlobe(globe) {
+            const points = [];
+            crisisData.earthquakes.slice(0, 30).forEach(eq => {
+                const coords = eq.geometry.coordinates;
+                if (!coords || coords.length < 2) return;
+                const lon = coords[0];
+                const lat = coords[1];
+                const mag = eq.properties.mag || 0;
                 const sev = severityFromMag(mag);
-                const colors = {
-                    critical: Cesium.Color.fromCssColorString('#ef4444'),
-                    high: Cesium.Color.fromCssColorString('#fb923c'),
-                    medium: Cesium.Color.fromCssColorString('#fbbf24'),
-                    low: Cesium.Color.fromCssColorString('#4ade80')
-                };
-
-                viewer.entities.add({
-                    position: Cesium.Cartesian3.fromDegrees(lon, lat),
-                    point: {
-                        pixelSize: Math.max(mag * 3, 8),
-                        color: colors[sev],
-                        outlineColor: Cesium.Color.WHITE,
-                        outlineWidth: 1,
-                        scaleByDistance: new Cesium.NearFarScalar(1.5e2, 2.0, 1.5e7, 0.5)
-                    },
-                    label: {
-                        text: `M${mag}`,
-                        font: '12px JetBrains Mono',
-                        fillColor: Cesium.Color.WHITE,
-                        outlineColor: Cesium.Color.BLACK,
-                        outlineWidth: 2,
-                        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-                        pixelOffset: new Cesium.Cartesian2(0, -10)
-                    },
-                    description: `
-                        <div style="color:#f8fafc;font-family:Inter,sans-serif;padding:10px;">
-                            <h3 style="font-family:Orbitron;margin:0 0 8px;">${eq.properties.place}</h3>
-                            <p><strong>Magnitude:</strong> ${mag}</p>
-                            <p><strong>Depth:</strong> ${depth}km</p>
-                            <p><strong>Time:</strong> ${new Date(eq.properties.time).toUTCString()}</p>
-                            <p><strong>Source:</strong> USGS</p>
-                        </div>
-                    `
-                });
+                let color = '#4ade80';
+                let size = 0.04;
+                if (sev === 'critical') { color = '#ef4444';
+                    size = 0.07; } else if (sev === 'high') { color = '#fb923c';
+                    size = 0.06; } else if (sev === 'medium') { color = '#fbbf24';
+                    size = 0.05; }
+                points.push({ lat, lon, color, size, label: `M${mag.toFixed(1)}` });
             });
+            globe.addMarkers(points);
         }
 
         // ==========================================
@@ -1067,15 +1415,15 @@
         function renderDashboard() {
             const events = [];
 
-            // Combine earthquakes and disasters
             crisisData.earthquakes.slice(0, 8).forEach(eq => {
                 events.push({
-                    title: eq.properties.place,
+                    title: eq.properties.place || 'Unknown location',
                     type: 'Earthquake',
-                    severity: severityFromMag(eq.properties.mag),
-                    region: eq.properties.place,
-                    time: eq.properties.time,
-                    source: 'USGS'
+                    severity: severityFromMag(eq.properties.mag || 0),
+                    region: eq.properties.place || 'Unknown',
+                    time: eq.properties.time || Date.now(),
+                    source: 'USGS',
+                    mag: eq.properties.mag || 0
                 });
             });
 
@@ -1086,59 +1434,59 @@
                     type: fields.type?.[0]?.name || 'Crisis',
                     severity: 'high',
                     region: fields.country?.[0]?.name || 'Global',
-                    time: fields.date?.created,
+                    time: fields.date?.created || Date.now(),
                     source: 'ReliefWeb'
                 });
             });
 
-            // Sort by time
             events.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-            // Update stats
-            $('stat-active').textContent = events.length + crisisData.disasters.length;
-            $('stat-alerts').textContent = events.filter(e => e.severity === 'critical' || e.severity === 'high').length;
+            const activeCount = events.length + crisisData.disasters.length;
+            const alertCount = events.filter(e => e.severity === 'critical' || e.severity === 'high').length;
 
-            // Render event list
+            animateNumber($('stat-active'), activeCount);
+            animateNumber($('stat-alerts'), alertCount);
+
             const eventList = $('event-list');
             eventList.innerHTML = events.slice(0, 6).map(e => `
-                <div class="event-item ${e.severity}">
-                    <div class="event-header">
-                        <div class="event-title">${e.title}</div>
-                        <span class="event-severity severity-badge-${e.severity}">${e.severity}</span>
+                    <div class="event-item ${e.severity}" onclick="focusEvent('${e.title.replace(/'/g, "\\'")}')">
+                        <div class="event-header">
+                            <div class="event-title">${e.title}</div>
+                            <span class="event-severity severity-badge-${e.severity}">${e.severity}</span>
+                        </div>
+                        <div class="event-meta">
+                            <span>${e.type}</span>
+                            <span class="dot">•</span>
+                            <span>${e.region}</span>
+                            <span class="dot">•</span>
+                            <span>${timeAgo(e.time)}</span>
+                        </div>
                     </div>
-                    <div class="event-meta">
-                        <span>${e.type}</span>
-                        <span>•</span>
-                        <span>${e.region}</span>
-                        <span>•</span>
-                        <span>${timeAgo(e.time)}</span>
-                    </div>
-                </div>
-            `).join('');
+                `).join('');
 
-            // Render alerts (critical + high only)
             const alerts = events.filter(e => e.severity === 'critical' || e.severity === 'high');
             $('alert-list').innerHTML = alerts.slice(0, 5).map(e => `
-                <div class="event-item ${e.severity}">
-                    <div class="event-header">
-                        <div class="event-title">${e.title}</div>
+                    <div class="event-item ${e.severity}">
+                        <div class="event-header">
+                            <div class="event-title">${e.title}</div>
+                            <span class="event-severity severity-badge-${e.severity}">${e.severity}</span>
+                        </div>
+                        <div class="event-meta">
+                            <span style="color:var(--${e.severity})">●</span>
+                            <span>${e.source}</span>
+                            <span class="dot">•</span>
+                            <span>${timeAgo(e.time)}</span>
+                        </div>
                     </div>
-                    <div class="event-meta">
-                        <span style="color:var(--${e.severity})">${e.severity.toUpperCase()}</span>
-                        <span>•</span>
-                        <span>${e.source}</span>
-                    </div>
-                </div>
-            `).join('');
+                `).join('');
 
-            // Render news
             const newsItems = [];
             if (crisisData.earthquakes[0]) {
                 const eq = crisisData.earthquakes[0];
                 newsItems.push({
                     source: 'USGS',
-                    title: `M${eq.properties.mag} earthquake detected near ${eq.properties.place}`,
-                    time: eq.properties.time
+                    title: `M${(eq.properties.mag || 0).toFixed(1)} earthquake detected near ${eq.properties.place || 'unknown location'}`,
+                    time: eq.properties.time || Date.now()
                 });
             }
             crisisData.disasters.slice(0, 4).forEach(d => {
@@ -1146,38 +1494,77 @@
                 newsItems.push({
                     source: 'ReliefWeb',
                     title: f.name || 'Humanitarian update',
-                    time: f.date?.created || new Date()
+                    time: f.date?.created || Date.now()
                 });
             });
 
             $('news-feed').innerHTML = newsItems.map(n => `
-                <div class="news-item">
-                    <div class="news-source">${n.source}</div>
-                    <div class="news-title">${n.title}</div>
-                    <div class="news-time">${timeAgo(n.time)}</div>
-                </div>
-            `).join('');
+                    <div class="news-item">
+                        <div class="news-source">${n.source}</div>
+                        <div class="news-title">${n.title}</div>
+                        <div class="news-time">${timeAgo(n.time)}</div>
+                    </div>
+                `).join('');
         }
 
+        function animateNumber(el, target) {
+            if (!el) return;
+            const current = parseInt(el.textContent) || 0;
+            const diff = target - current;
+            if (diff === 0) return;
+            const steps = 20;
+            let step = 0;
+            const interval = setInterval(() => {
+                step++;
+                const progress = step / steps;
+                const eased = 1 - Math.pow(1 - progress, 3);
+                const val = Math.round(current + diff * eased);
+                el.textContent = val;
+                if (step >= steps) {
+                    el.textContent = target;
+                    clearInterval(interval);
+                }
+            }, 30);
+        }
+
+        window.focusEvent = function(title) {
+            showToast(title, 'Event selected • GCMS CORE X', 'medium');
+        };
+
+        // ==========================================
+        // TOAST SYSTEM
+        // ==========================================
         function showToast(title, subtitle, severity = 'critical') {
             const container = $('toast-container');
             const toast = document.createElement('div');
             toast.className = 'toast';
-            toast.style.borderLeftColor = `var(--${severity})`;
+            const severityColors = {
+                critical: 'var(--critical)',
+                high: 'var(--high)',
+                medium: 'var(--medium)',
+                low: 'var(--low)'
+            };
+            toast.style.borderLeftColor = severityColors[severity] || 'var(--critical)';
             toast.innerHTML = `
-                <div class="toast-header">
-                    <span class="toast-icon">🚨</span>
-                    <span class="toast-label" style="color:var(--${severity})">${severity} ALERT</span>
-                </div>
-                <div class="toast-title">${title}</div>
-                <div class="toast-meta">${subtitle}</div>
-            `;
+                    <div class="toast-header">
+                        <span class="toast-icon">${severity === 'critical' ? '🚨' : severity === 'high' ? '⚠️' : severity === 'medium' ? '📢' : 'ℹ️'}</span>
+                        <span class="toast-label" style="color:${severityColors[severity] || 'var(--critical)'}">${severity.toUpperCase()} ALERT</span>
+                    </div>
+                    <div class="toast-title">${title}</div>
+                    <div class="toast-meta">${subtitle}</div>
+                `;
             container.appendChild(toast);
 
-            setTimeout(() => {
-                toast.style.animation = 'fadeOut 0.5s ease forwards';
+            const dismissTimer = setTimeout(() => {
+                toast.classList.add('removing');
                 setTimeout(() => toast.remove(), 500);
-            }, 6000);
+            }, 7000);
+
+            toast.addEventListener('click', () => {
+                clearTimeout(dismissTimer);
+                toast.classList.add('removing');
+                setTimeout(() => toast.remove(), 500);
+            });
         }
 
         // ==========================================
@@ -1187,48 +1574,44 @@
             if (isExpanded) return;
             isExpanded = true;
 
-            // Fade out cinematic UI
             document.querySelector('.cinematic-ui').style.opacity = '0';
             document.querySelector('.cinematic-vignette').style.opacity = '0';
+            document.querySelector('.cinematic-glow-ring').style.opacity = '0';
+            document.getElementById('cinematic-stars').style.opacity = '0';
 
-            // Animate camera to full view (guarded in case the cinematic
-            // globe never initialized successfully)
-            if (cinematicViewer) {
-                cinematicViewer.camera.flyTo({
-                    destination: Cesium.Cartesian3.fromDegrees(0, 15, 18000000),
-                    orientation: { pitch: Cesium.Math.toRadians(-45) },
-                    duration: 2.5,
-                    easingFunction: Cesium.EasingFunction.EXPONENTIAL_OUT
-                });
-            }
+            await sleep(1200);
 
-            await sleep(1500);
-
-            // Switch views
             $('cinematic-view').classList.remove('active');
             $('dashboard').classList.add('active');
 
-            // Init full globe after transition
             setTimeout(() => {
                 try {
                     initFullGlobe();
                 } catch (err) {
-                    console.error('Full dashboard globe failed to initialize:', err);
+                    console.error('Dashboard globe failed:', err);
                 }
                 renderDashboard();
 
-                // Show toast with latest event
                 if (crisisData.earthquakes.length > 0) {
                     const latest = crisisData.earthquakes[0];
-                    showToast(
-                        `M${latest.properties.mag} ${latest.properties.place}`,
-                        `${formatTime(latest.properties.time)} • USGS Seismic Network`,
-                        severityFromMag(latest.properties.mag)
-                    );
+                    const mag = latest.properties.mag || 0;
+                    const place = latest.properties.place || 'Unknown';
+                    const sev = severityFromMag(mag);
+                    if (sev === 'critical' || sev === 'high') {
+                        showToast(
+                            `M${mag.toFixed(1)} ${place}`,
+                            `${formatTime(latest.properties.time)} • USGS`,
+                            sev
+                        );
+                    }
                 }
-            }, 300);
+                if (crisisData.disasters.length > 0) {
+                    const d = crisisData.disasters[0];
+                    const name = d.fields?.name || 'Disaster alert';
+                    showToast(name, `ReliefWeb • ${d.fields?.country?.[0]?.name || 'Global'}`, 'high');
+                }
+            }, 400);
 
-            // Start clock
             setInterval(() => {
                 $('clock').textContent = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
             }, 1000);
@@ -1239,33 +1622,57 @@
         // ==========================================
         async function init() {
             initLoader();
+            generateCinematicStars();
 
-            // Fetch data
             crisisData = await fetchCrisisData();
 
-            await sleep(600);
-
-            // Hide loader, show cinematic
+            await sleep(500);
             $('loader').classList.add('hidden');
             $('cinematic-view').classList.add('active');
 
-            // Attach tap/click handler FIRST, before any Cesium setup —
-            // this guarantees "Tap to Access" always works even if the
-            // 3D globe below fails to initialize for any reason.
+            try {
+                initCinematicGlobe();
+                // Add markers to cinematic too (optional)
+                setTimeout(() => {
+                    if (cinematicScene && crisisData.earthquakes.length > 0) {
+                        addMarkersToGlobe(cinematicScene);
+                    }
+                }, 500);
+            } catch (err) {
+                console.error('Cinematic globe failed:', err);
+            }
+
             const view = $('cinematic-view');
             view.addEventListener('click', expandToDashboard);
             view.addEventListener('touchstart', expandToDashboard, { passive: true });
 
-            // Init cinematic globe (wrapped so a Cesium/WebGL failure
-            // can't ever block tap-to-access from working)
-            try {
-                initCinematicGlobe();
-            } catch (err) {
-                console.error('Cinematic globe failed to initialize:', err);
-            }
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    if ($('cinematic-view').classList.contains('active') && !isExpanded) {
+                        expandToDashboard();
+                    }
+                }
+            });
         }
 
-        // Start
+        // Handle resize for all globes
+        window.addEventListener('resize', () => {
+            if (fullScene) {
+                try {
+                    fullScene.renderer.setSize(fullScene.container.clientWidth, fullScene.container.clientHeight);
+                    fullScene.camera.aspect = fullScene.container.clientWidth / fullScene.container.clientHeight;
+                    fullScene.camera.updateProjectionMatrix();
+                } catch (e) { /* ignore */ }
+            }
+            if (cinematicScene) {
+                try {
+                    cinematicScene.renderer.setSize(cinematicScene.container.clientWidth, cinematicScene.container.clientHeight);
+                    cinematicScene.camera.aspect = cinematicScene.container.clientWidth / cinematicScene.container.clientHeight;
+                    cinematicScene.camera.updateProjectionMatrix();
+                } catch (e) { /* ignore */ }
+            }
+        });
+
         init();
     </script>
 </body>
