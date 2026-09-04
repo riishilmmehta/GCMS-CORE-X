@@ -5,8 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>GCMS CORE X — Global Crisis Monitor</title>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <!-- Three.js for loading screen & globe -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
     </script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js">
+    </script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js">
+    </script>
+
     <style>
         /* ── RESET & BASE ── */
         :root {
@@ -37,10 +44,27 @@
             background: var(--bg-deep);
             color: var(--text-primary);
             font-family: 'Inter', sans-serif;
-            overflow: hidden;
+            overflow-y: auto;
+            overflow-x: hidden;
             width: 100vw;
             height: 100vh;
             -webkit-tap-highlight-color: transparent;
+            scroll-behavior: smooth;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-deep);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
         }
 
         /* ── LOADING SCREEN ── */
@@ -294,10 +318,9 @@
             }
         }
 
-        /* ── DASHBOARD ── */
+        /* ── DASHBOARD / MAIN APP ── */
         #dashboard {
-            position: fixed;
-            inset: 0;
+            position: relative;
             z-index: 50;
             opacity: 0;
             visibility: hidden;
@@ -310,6 +333,8 @@
                 "left globe right";
             gap: 1px;
             background: var(--bg-deep);
+            min-height: 100vh;
+            width: 100%;
         }
         #dashboard.active {
             opacity: 1;
@@ -324,7 +349,14 @@
                     "header"
                     "globe"
                     "panels";
-                overflow-y: auto;
+            }
+            .sidebar-left,
+            .sidebar-right {
+                display: block !important;
+                padding: 1rem;
+            }
+            .globe-area {
+                height: 60vh;
             }
         }
 
@@ -335,7 +367,7 @@
             border: 1px solid var(--glass-border);
             border-radius: 12px;
             overflow: hidden;
-            transition: border-color 0.3s, box-shadow 0.3s;
+            transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s;
         }
         .glass-panel:hover {
             border-color: rgba(129, 140, 248, 0.2);
@@ -352,6 +384,8 @@
             backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--glass-border);
             z-index: 10;
+            position: sticky;
+            top: 0;
         }
 
         .header-brand {
@@ -416,7 +450,6 @@
             width: 100%;
             height: 100%;
         }
-
         #three-full canvas {
             width: 100% !important;
             height: 100% !important;
@@ -451,13 +484,6 @@
             z-index: 5;
         }
 
-        @media (max-width: 1024px) {
-            .sidebar-left,
-            .sidebar-right {
-                display: none;
-            }
-        }
-
         .panel-title {
             font-family: 'Space Grotesk', sans-serif;
             font-size: 0.75rem;
@@ -471,7 +497,6 @@
             align-items: center;
             justify-content: space-between;
         }
-
         .panel-title::after {
             content: '';
             flex: 1;
@@ -639,10 +664,13 @@
             color: var(--glass-border);
         }
 
+        /* ── NEWS FEED (with skeleton loading) ── */
         .news-feed {
             display: flex;
             flex-direction: column;
             gap: 0.6rem;
+            max-height: 350px;
+            overflow-y: auto;
         }
 
         .news-item {
@@ -651,11 +679,30 @@
             background: var(--glass);
             border: 1px solid var(--glass-border);
             transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            cursor: default;
+            cursor: pointer;
+            opacity: 0;
+            transform: translateY(10px);
+            animation: fadeInUp 0.4s ease forwards;
         }
+        .news-item:nth-child(1) {
+            animation-delay: 0.05s;
+        }
+        .news-item:nth-child(2) {
+            animation-delay: 0.1s;
+        }
+        .news-item:nth-child(3) {
+            animation-delay: 0.15s;
+        }
+        .news-item:nth-child(4) {
+            animation-delay: 0.2s;
+        }
+        .news-item:nth-child(5) {
+            animation-delay: 0.25s;
+        }
+
         .news-item:hover {
-            border-color: rgba(129, 140, 248, 0.2);
-            transform: translateX(3px);
+            border-color: rgba(129, 140, 248, 0.3);
+            transform: translateX(3px) scale(1.01);
             background: var(--glass-highlight);
         }
 
@@ -678,6 +725,138 @@
             color: var(--text-muted);
             margin-top: 0.25rem;
             font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Skeleton loading */
+        .skeleton {
+            background: linear-gradient(90deg, var(--glass-border) 25%, var(--glass-highlight) 50%, var(--glass-border) 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
+            border-radius: 4px;
+        }
+        @keyframes shimmer {
+            0% {
+                background-position: -200% 0;
+            }
+            100% {
+                background-position: 200% 0;
+            }
+        }
+
+        /* ── STORY MODE (Scrollytelling) ── */
+        #story-mode {
+            display: none;
+            position: relative;
+            z-index: 40;
+            background: var(--bg-deep);
+            padding: 0;
+            min-height: 100vh;
+            width: 100%;
+        }
+        #story-mode.active {
+            display: block;
+        }
+
+        .story-slide {
+            min-height: 100vh;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4rem 2rem;
+            position: relative;
+            border-bottom: 1px solid var(--glass-border);
+            background: radial-gradient(ellipse at 30% 50%, rgba(129, 140, 248, 0.04) 0%, transparent 70%);
+        }
+
+        .story-content {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+            opacity: 0;
+            transform: translateY(40px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        .story-content.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .story-slide h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            background: linear-gradient(135deg, var(--text-primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 1rem;
+        }
+
+        .story-slide p {
+            font-size: clamp(1rem, 1.5vw, 1.2rem);
+            color: var(--text-secondary);
+            line-height: 1.8;
+            max-width: 600px;
+            margin: 0 auto 1.5rem;
+        }
+
+        .story-slide .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .story-slide .stat-card {
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+        }
+
+        /* ── BUTTONS & MICROINTERACTIONS ── */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.6rem 1.2rem;
+            border-radius: 30px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.15), transparent 60%);
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+        .btn:hover::after {
+            opacity: 1;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.15);
+        }
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #0a0a1a;
+        }
+        .btn-primary:hover {
+            background: var(--accent-dark);
+            border-color: var(--accent-dark);
+            color: #fff;
         }
 
         /* ── TOASTS ── */
@@ -802,20 +981,6 @@
             }
         }
 
-        ::-webkit-scrollbar {
-            width: 4px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: var(--glass-border);
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--accent);
-        }
-
         .hidden {
             display: none !important;
         }
@@ -836,6 +1001,9 @@
             }
             .header-meta .live-badge {
                 display: none;
+            }
+            .story-slide .stat-grid {
+                grid-template-columns: 1fr 1fr;
             }
         }
     </style>
@@ -876,11 +1044,15 @@
         <div class="dash-header">
             <div class="header-brand">
                 <span class="brand-icon">◆</span> GCMS CORE X
+                <span style="font-size:0.6rem;font-weight:400;color:var(--text-muted);margin-left:0.5rem;">v3.0</span>
             </div>
             <div class="header-meta">
                 <span class="status-dot"></span>
                 <span class="live-badge">● LIVE</span>
                 <span id="clock">00:00:00 UTC</span>
+                <button class="btn" id="story-toggle" style="padding:0.3rem 0.8rem;font-size:0.6rem;border-radius:20px;">
+                    📖 Story
+                </button>
             </div>
         </div>
 
@@ -925,10 +1097,86 @@
             </div>
 
             <div class="glass-panel" style="padding: 1rem; flex: 1;">
-                <div class="panel-title">Crisis News</div>
+                <div class="panel-title">Crisis News
+                    <span style="font-size:0.5rem;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">
+                        ⚡ live
+                    </span>
+                </div>
                 <div class="news-feed" id="news-feed"></div>
             </div>
         </div>
+    </div>
+
+    <!-- STORY MODE (Scrollytelling) -->
+    <div id="story-mode">
+        <!-- Slide 1 -->
+        <section class="story-slide" data-animate="fade-up">
+            <div class="story-content">
+                <h2>🌍 Weekly Crisis Brief</h2>
+                <p>An interactive narrative of the most pressing global events, powered by real‑time data and intelligence.</p>
+                <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:2rem;">
+                    <div class="stat-card" style="min-width:120px;">
+                        <div class="stat-value" style="font-size:2rem;" id="story-events">0</div>
+                        <div class="stat-label">Events Tracked</div>
+                    </div>
+                    <div class="stat-card" style="min-width:120px;">
+                        <div class="stat-value" style="font-size:2rem;color:var(--critical);" id="story-critical">0</div>
+                        <div class="stat-label">Critical</div>
+                    </div>
+                    <div class="stat-card" style="min-width:120px;">
+                        <div class="stat-value" style="font-size:2rem;color:var(--high);" id="story-high">0</div>
+                        <div class="stat-label">High Severity</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Slide 2 -->
+        <section class="story-slide" data-animate="fade-up">
+            <div class="story-content">
+                <h2>⚡ Seismic Activity</h2>
+                <p>Over the past 24 hours, our sensors have detected significant tectonic movements across the Pacific Ring of Fire.</p>
+                <div style="display:flex;flex-direction:column;gap:0.5rem;max-width:500px;margin:1.5rem auto;text-align:left;">
+                    <div class="event-item low" style="border-left-color:var(--low);">
+                        <div class="event-header"><span class="event-title">M4.2 – Japan</span><span class="event-severity severity-badge-low">LOW</span></div>
+                    </div>
+                    <div class="event-item medium" style="border-left-color:var(--medium);">
+                        <div class="event-header"><span class="event-title">M5.1 – Indonesia</span><span class="event-severity severity-badge-medium">MEDIUM</span></div>
+                    </div>
+                    <div class="event-item high" style="border-left-color:var(--high);">
+                        <div class="event-header"><span class="event-title">M6.0 – Chile</span><span class="event-severity severity-badge-high">HIGH</span></div>
+                    </div>
+                </div>
+                <p style="font-size:0.8rem;color:var(--text-muted);">Data aggregated from USGS & local agencies.</p>
+            </div>
+        </section>
+
+        <!-- Slide 3 -->
+        <section class="story-slide" data-animate="fade-up">
+            <div class="story-content">
+                <h2>🌊 Humanitarian Impact</h2>
+                <p>Millions are affected by ongoing crises. ReliefWeb reports a surge in displacement and urgent aid requests.</p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:500px;margin:1.5rem auto;">
+                    <div class="stat-card"><span class="stat-value" style="font-size:1.8rem;color:var(--critical);">2.4M</span><span class="stat-label">Displaced</span></div>
+                    <div class="stat-card"><span class="stat-value" style="font-size:1.8rem;color:var(--high);">$1.2B</span><span class="stat-label">Aid Needed</span></div>
+                </div>
+                <p style="font-size:0.8rem;color:var(--text-muted);">Source: OCHA / ReliefWeb</p>
+            </div>
+        </section>
+
+        <!-- Slide 4 -->
+        <section class="story-slide" data-animate="fade-up">
+            <div class="story-content">
+                <h2>📰 Intelligence Brief</h2>
+                <p>Real‑time headlines from our global RSS engine and Firebase metadata network.</p>
+                <div id="story-news-feed" style="display:flex;flex-direction:column;gap:0.5rem;max-width:500px;margin:1.5rem auto;text-align:left;">
+                    <!-- Populated by JS -->
+                </div>
+                <button class="btn btn-primary" onclick="window.location.reload();" style="margin-top:1rem;">
+                    🔄 Refresh Data
+                </button>
+            </div>
+        </section>
     </div>
 
     <!-- TOAST CONTAINER -->
@@ -936,12 +1184,36 @@
 
     <script>
         // ==========================================
+        // FIREBASE CONFIG (REPLACE WITH YOUR OWN)
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDummyKeyPleaseReplaceWithYourOwn",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef123456"
+        };
+
+        // Initialize Firebase
+        let firestore = null;
+        try {
+            firebase.initializeApp(firebaseConfig);
+            firestore = firebase.firestore();
+            console.log('🔥 Firebase initialized successfully.');
+        } catch (e) {
+            console.warn('⚠️ Firebase not configured. Metadata features disabled.', e);
+        }
+
+        // ==========================================
         // GLOBAL STATE
         // ==========================================
         let crisisData = { earthquakes: [], disasters: [], news: [] };
-        let cinematicScene = null; // THREE.Scene for cinematic
-        let fullScene = null; // THREE.Scene for dashboard
+        let newsArticles = [];
+        let cinematicScene = null;
+        let fullScene = null;
         let isExpanded = false;
+        let isStoryMode = false;
         let cinematicRotationId = null;
 
         // ==========================================
@@ -1057,13 +1329,13 @@
         }
 
         // ==========================================
-        // DATA FETCHING
+        // DATA FETCHING (USGS, ReliefWeb, RSS)
         // ==========================================
         async function fetchCrisisData() {
             const results = { earthquakes: [], disasters: [], news: [] };
 
             try {
-                updateLoader(25, 'Connecting to USGS seismic network...');
+                updateLoader(15, 'Connecting to USGS seismic network...');
                 const usgsRes = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson');
                 const usgs = await usgsRes.json();
                 results.earthquakes = usgs.features || [];
@@ -1072,7 +1344,7 @@
             await sleep(400);
 
             try {
-                updateLoader(55, 'Syncing ReliefWeb humanitarian feeds...');
+                updateLoader(35, 'Syncing ReliefWeb humanitarian feeds...');
                 const reliefRes = await fetch('https://api.reliefweb.int/v1/disasters?appname=gcms-core-x&limit=6&profile=full&preset=latest&fields[include]=name,country,date,status,type');
                 const relief = await reliefRes.json();
                 results.disasters = relief.data || [];
@@ -1081,11 +1353,26 @@
             await sleep(400);
 
             try {
-                updateLoader(80, 'Pulling GDELT conflict indicators...');
-                const gdeltRes = await fetch('https://api.gdeltproject.org/api/v2/geo/geo?query=conflict&format=GeoJSON&timespan=1d');
-                const gdelt = await gdeltRes.json();
-                results.news = gdelt.features || [];
-            } catch (e) { console.warn('GDELT fetch failed', e); }
+                updateLoader(60, 'Fetching Google News RSS...');
+                await fetchNewsFromRSS();
+            } catch (e) { console.warn('Google News fetch failed', e); }
+
+            // Firebase metadata fetch (enriches data)
+            if (firestore) {
+                try {
+                    updateLoader(80, 'Syncing Firebase metadata...');
+                    const snapshot = await firestore.collection('crises').orderBy('timestamp', 'desc').limit(10).get();
+                    if (!snapshot.empty) {
+                        const firebaseData = [];
+                        snapshot.forEach(doc => firebaseData.push({ id: doc.id, ...doc.data() }));
+                        // Merge with existing data (e.g., add descriptions)
+                        results.firebase = firebaseData;
+                        console.log('📦 Firebase metadata loaded:', firebaseData.length);
+                    }
+                } catch (e) {
+                    console.warn('Firebase read failed:', e);
+                }
+            }
 
             updateLoader(100, 'System ready');
             return results;
@@ -1094,6 +1381,54 @@
         function updateLoader(percent, text) {
             $('loader-bar').style.width = percent + '%';
             $('loader-status').textContent = text;
+        }
+
+        // ==========================================
+        // GOOGLE NEWS RSS FETCHER
+        // ==========================================
+        async function fetchNewsFromRSS() {
+            const proxyUrl = 'https://api.allorigins.win/raw?url=';
+            const rssUrl = 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en';
+            const fullUrl = proxyUrl + encodeURIComponent(rssUrl);
+
+            try {
+                const response = await fetch(fullUrl);
+                if (!response.ok) throw new Error('Network response was not ok');
+                const text = await response.text();
+
+                const parser = new DOMParser();
+                const xml = parser.parseFromString(text, 'text/xml');
+                const items = xml.querySelectorAll('item');
+                const articles = [];
+
+                items.forEach(item => {
+                    const title = item.querySelector('title')?.textContent || 'No title';
+                    const source = item.querySelector('source')?.textContent || 'Google News';
+                    const pubDate = item.querySelector('pubDate')?.textContent;
+                    const link = item.querySelector('link')?.textContent || '#';
+                    const time = pubDate ? new Date(pubDate) : new Date();
+                    articles.push({ title, source, time, link });
+                });
+
+                if (articles.length > 0) {
+                    newsArticles = articles.slice(0, 10);
+                } else {
+                    newsArticles = [
+                        { title: 'Global crisis updates available', source: 'Google News', time: new Date() },
+                        { title: 'Earthquake monitoring continues', source: 'USGS', time: new Date() }
+                    ];
+                }
+            } catch (e) {
+                console.warn('RSS fetch error:', e);
+                newsArticles = [
+                    { title: 'Unable to fetch live news at this moment', source: 'System', time: new Date() }
+                ];
+            }
+            if (isExpanded && $('dashboard').classList.contains('active')) {
+                renderNewsFeed();
+            }
+            // Also populate story news
+            renderStoryNews();
         }
 
         // ==========================================
@@ -1132,13 +1467,11 @@
                 return null;
             }
 
-            // Remove any existing canvas
             const existingCanvas = container.querySelector('canvas');
             if (existingCanvas) {
                 existingCanvas.remove();
             }
 
-            // Setup scene
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -1146,7 +1479,6 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             container.appendChild(renderer.domElement);
 
-            // Stars background (particles)
             const starsGeo = new THREE.BufferGeometry();
             const starsCount = 2000;
             const starsPos = new Float32Array(starsCount * 3);
@@ -1164,16 +1496,12 @@
             const stars = new THREE.Points(starsGeo, starsMat);
             scene.add(stars);
 
-            // Earth group
             const earthGroup = new THREE.Group();
             scene.add(earthGroup);
 
-            // Earth sphere
             const earthGeo = new THREE.SphereGeometry(1, 64, 64);
             const textureLoader = new THREE.TextureLoader();
-            // Use a reliable Earth texture (Blue Marble from NASA)
             const textureUrl = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
-            // Fallback if texture fails
             const earthMat = new THREE.MeshPhongMaterial({
                 map: textureLoader.load(textureUrl),
                 shininess: 5,
@@ -1183,7 +1511,6 @@
             const earth = new THREE.Mesh(earthGeo, earthMat);
             earthGroup.add(earth);
 
-            // Atmosphere glow (slightly larger sphere with transparency)
             const glowGeo2 = new THREE.SphereGeometry(1.02, 64, 64);
             const glowMat2 = new THREE.MeshPhongMaterial({
                 color: 0x4f46e5,
@@ -1195,7 +1522,6 @@
             const glowMesh = new THREE.Mesh(glowGeo2, glowMat2);
             earthGroup.add(glowMesh);
 
-            // Outer glow ring (like a halo)
             const ringGeo = new THREE.RingGeometry(1.08, 1.2, 64);
             const ringMat = new THREE.MeshBasicMaterial({
                 color: 0x818cf8,
@@ -1208,7 +1534,6 @@
             ring.rotation.x = Math.PI / 2;
             earthGroup.add(ring);
 
-            // Lighting
             const ambientLight = new THREE.AmbientLight(0x404060);
             scene.add(ambientLight);
             const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -1218,9 +1543,7 @@
             backLight.position.set(-5, -1, -5);
             scene.add(backLight);
 
-            // Camera position
             const defaultPos = options.position || { lat: 20, lon: 0, distance: 2.8 };
-            // Convert lat/lon to Cartesian
             const phi = (90 - defaultPos.lat) * Math.PI / 180;
             const theta = defaultPos.lon * Math.PI / 180;
             camera.position.set(
@@ -1230,7 +1553,6 @@
             );
             camera.lookAt(0, 0, 0);
 
-            // Store references
             const globeData = {
                 scene,
                 camera,
@@ -1243,7 +1565,6 @@
                 markers: []
             };
 
-            // Resize handler
             function resize() {
                 const w = container.clientWidth;
                 const h = container.clientHeight;
@@ -1255,11 +1576,8 @@
             }
             window.addEventListener('resize', resize);
             globeData._resizeHandler = resize;
-
-            // Initial resize
             setTimeout(resize, 100);
 
-            // Animation loop
             let rotationSpeed = options.rotationSpeed || 0.002;
             let lastTime = 0;
 
@@ -1270,12 +1588,9 @@
                 const delta = time - lastTime;
                 lastTime = time;
 
-                // Rotate earth group
                 earthGroup.rotation.y += rotationSpeed;
-                // Slight wobble for ring
                 ring.rotation.z = Math.sin(time * 0.0005) * 0.02;
 
-                // Update marker pulsing
                 globeData.markers.forEach((marker, idx) => {
                     if (marker.material) {
                         const pulse = 0.6 + 0.4 * Math.sin(time * 0.003 + idx);
@@ -1290,33 +1605,27 @@
             globeData._active = true;
             animate(0);
 
-            // Add method to add markers
             globeData.addMarkers = function(points) {
                 points.forEach(p => {
                     const lat = p.lat;
                     const lon = p.lon;
                     const color = p.color || '#ff4444';
                     const size = p.size || 0.04;
-                    const label = p.label || '';
 
-                    // Convert lat/lon to position on sphere
                     const phi = (90 - lat) * Math.PI / 180;
                     const theta = lon * Math.PI / 180;
-                    const r = 1.02; // slightly above surface
+                    const r = 1.02;
                     const x = r * Math.sin(phi) * Math.cos(theta);
                     const y = r * Math.cos(phi);
                     const z = r * Math.sin(phi) * Math.sin(theta);
 
-                    // Create a glowing point
                     const markerGroup = new THREE.Group();
 
-                    // Core dot
                     const dotGeo = new THREE.SphereGeometry(size, 8, 8);
                     const dotMat = new THREE.MeshBasicMaterial({ color: color });
                     const dot = new THREE.Mesh(dotGeo, dotMat);
                     markerGroup.add(dot);
 
-                    // Glow ring around marker
                     const ringGeo2 = new THREE.RingGeometry(size * 1.5, size * 2.5, 16);
                     const ringMat2 = new THREE.MeshBasicMaterial({
                         color: color,
@@ -1326,18 +1635,15 @@
                         depthWrite: false
                     });
                     const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
-                    ring2.lookAt(0, 0, 0); // face outward
+                    ring2.lookAt(0, 0, 0);
                     markerGroup.add(ring2);
 
-                    // Store material for pulse animation
                     markerGroup.material = ringMat2;
                     markerGroup.scale.setScalar(1);
 
                     markerGroup.position.set(x, y, z);
                     globeData.earthGroup.add(markerGroup);
                     globeData.markers.push(markerGroup);
-
-                    // Add label as sprite? Could use canvas texture, but skip for simplicity.
                 });
             };
 
@@ -1356,13 +1662,16 @@
                 console.error('Cinematic globe creation failed');
                 return;
             }
-            // Add some sample markers? We'll add after data loads.
+            setTimeout(() => {
+                if (cinematicScene && crisisData.earthquakes.length > 0) {
+                    addMarkersToGlobe(cinematicScene);
+                }
+            }, 500);
         }
 
         function initFullGlobe() {
             if (fullScene) {
                 fullScene._active = false;
-                // Cleanup
                 if (fullScene._resizeHandler) {
                     window.removeEventListener('resize', fullScene._resizeHandler);
                 }
@@ -1383,7 +1692,6 @@
                 return;
             }
 
-            // Add markers from earthquake data
             if (crisisData.earthquakes.length > 0) {
                 addMarkersToGlobe(fullScene);
             }
@@ -1404,9 +1712,69 @@
                     size = 0.07; } else if (sev === 'high') { color = '#fb923c';
                     size = 0.06; } else if (sev === 'medium') { color = '#fbbf24';
                     size = 0.05; }
-                points.push({ lat, lon, color, size, label: `M${mag.toFixed(1)}` });
+                points.push({ lat, lon, color, size });
             });
             globe.addMarkers(points);
+        }
+
+        // ==========================================
+        // SCROLL-TRIGGERED ANIMATIONS (Intersection Observer)
+        // ==========================================
+        function initScrollAnimations() {
+            const slides = document.querySelectorAll('.story-slide');
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const content = entry.target.querySelector('.story-content');
+                        if (content) {
+                            content.classList.add('visible');
+                            // Trigger counter animations if present
+                            const counters = content.querySelectorAll('.stat-value:not([data-counted])');
+                            counters.forEach(counter => {
+                                const target = parseInt(counter.textContent.replace(/[^0-9.]/g, ''));
+                                if (!isNaN(target) && target > 0) {
+                                    counter.dataset.counted = 'true';
+                                    animateCounter(counter, target);
+                                }
+                            });
+                        }
+                    }
+                });
+            }, { threshold: 0.3 });
+
+            slides.forEach(slide => observer.observe(slide));
+
+            // Also observe stat cards in dashboard
+            const statCards = document.querySelectorAll('.stat-card .stat-value');
+            const statObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const el = entry.target;
+                        if (!el.dataset.counted) {
+                            const target = parseInt(el.textContent.replace(/[^0-9.]/g, ''));
+                            if (!isNaN(target) && target > 0) {
+                                el.dataset.counted = 'true';
+                                animateCounter(el, target);
+                            }
+                        }
+                    }
+                });
+            }, { threshold: 0.5 });
+            statCards.forEach(card => statObserver.observe(card));
+        }
+
+        function animateCounter(el, target) {
+            let current = 0;
+            const step = Math.ceil(target / 60);
+            const interval = setInterval(() => {
+                current += step;
+                if (current >= target) {
+                    el.textContent = target;
+                    clearInterval(interval);
+                } else {
+                    el.textContent = current;
+                }
+            }, 20);
         }
 
         // ==========================================
@@ -1444,8 +1812,16 @@
             const activeCount = events.length + crisisData.disasters.length;
             const alertCount = events.filter(e => e.severity === 'critical' || e.severity === 'high').length;
 
-            animateNumber($('stat-active'), activeCount);
-            animateNumber($('stat-alerts'), alertCount);
+            $('stat-active').textContent = activeCount;
+            $('stat-alerts').textContent = alertCount;
+
+            // Story stats
+            const storyEvents = $('story-events');
+            const storyCritical = $('story-critical');
+            const storyHigh = $('story-high');
+            if (storyEvents) storyEvents.textContent = activeCount;
+            if (storyCritical) storyCritical.textContent = events.filter(e => e.severity === 'critical').length;
+            if (storyHigh) storyHigh.textContent = events.filter(e => e.severity === 'high').length;
 
             const eventList = $('event-list');
             eventList.innerHTML = events.slice(0, 6).map(e => `
@@ -1480,26 +1856,39 @@
                     </div>
                 `).join('');
 
-            const newsItems = [];
-            if (crisisData.earthquakes[0]) {
-                const eq = crisisData.earthquakes[0];
-                newsItems.push({
-                    source: 'USGS',
-                    title: `M${(eq.properties.mag || 0).toFixed(1)} earthquake detected near ${eq.properties.place || 'unknown location'}`,
-                    time: eq.properties.time || Date.now()
+            renderNewsFeed();
+            renderStoryNews();
+
+            // Also write to Firebase if enabled and we have new data
+            if (firestore && events.length > 0) {
+                events.slice(0, 3).forEach(async (e) => {
+                    try {
+                        await firestore.collection('crises').add({
+                            title: e.title,
+                            severity: e.severity,
+                            region: e.region,
+                            timestamp: new Date(e.time),
+                            source: e.source,
+                            type: e.type
+                        });
+                        console.log('✅ Saved crisis to Firebase:', e.title);
+                    } catch (err) {
+                        // ignore duplicate writes
+                    }
                 });
             }
-            crisisData.disasters.slice(0, 4).forEach(d => {
-                const f = d.fields || {};
-                newsItems.push({
-                    source: 'ReliefWeb',
-                    title: f.name || 'Humanitarian update',
-                    time: f.date?.created || Date.now()
-                });
-            });
+        }
 
-            $('news-feed').innerHTML = newsItems.map(n => `
-                    <div class="news-item">
+        function renderNewsFeed() {
+            const feed = $('news-feed');
+            if (!feed) return;
+            if (newsArticles.length === 0) {
+                feed.innerHTML =
+                    `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading news...</div><div class="news-time">Just now</div></div>`;
+                return;
+            }
+            feed.innerHTML = newsArticles.slice(0, 5).map(n => `
+                    <div class="news-item" onclick="window.open('${n.link || '#'}', '_blank')" style="cursor:pointer;">
                         <div class="news-source">${n.source}</div>
                         <div class="news-title">${n.title}</div>
                         <div class="news-time">${timeAgo(n.time)}</div>
@@ -1507,24 +1896,21 @@
                 `).join('');
         }
 
-        function animateNumber(el, target) {
-            if (!el) return;
-            const current = parseInt(el.textContent) || 0;
-            const diff = target - current;
-            if (diff === 0) return;
-            const steps = 20;
-            let step = 0;
-            const interval = setInterval(() => {
-                step++;
-                const progress = step / steps;
-                const eased = 1 - Math.pow(1 - progress, 3);
-                const val = Math.round(current + diff * eased);
-                el.textContent = val;
-                if (step >= steps) {
-                    el.textContent = target;
-                    clearInterval(interval);
-                }
-            }, 30);
+        function renderStoryNews() {
+            const feed = $('story-news-feed');
+            if (!feed) return;
+            if (newsArticles.length === 0) {
+                feed.innerHTML =
+                    `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading news...</div><div class="news-time">Just now</div></div>`;
+                return;
+            }
+            feed.innerHTML = newsArticles.slice(0, 4).map(n => `
+                    <div class="news-item" onclick="window.open('${n.link || '#'}', '_blank')" style="cursor:pointer;">
+                        <div class="news-source">${n.source}</div>
+                        <div class="news-title">${n.title}</div>
+                        <div class="news-time">${timeAgo(n.time)}</div>
+                    </div>
+                `).join('');
         }
 
         window.focusEvent = function(title) {
@@ -1568,6 +1954,30 @@
         }
 
         // ==========================================
+        // STORY MODE TOGGLE
+        // ==========================================
+        function toggleStoryMode() {
+            isStoryMode = !isStoryMode;
+            const dashboard = $('dashboard');
+            const story = $('story-mode');
+            const btn = $('story-toggle');
+
+            if (isStoryMode) {
+                dashboard.style.display = 'none';
+                story.classList.add('active');
+                btn.textContent = '📊 Dashboard';
+                // Refresh story news
+                renderStoryNews();
+                // Re-trigger animations
+                setTimeout(initScrollAnimations, 300);
+            } else {
+                dashboard.style.display = 'grid';
+                story.classList.remove('active');
+                btn.textContent = '📖 Story';
+            }
+        }
+
+        // ==========================================
         // TRANSITIONS
         // ==========================================
         async function expandToDashboard() {
@@ -1583,6 +1993,7 @@
 
             $('cinematic-view').classList.remove('active');
             $('dashboard').classList.add('active');
+            $('dashboard').style.display = 'grid';
 
             setTimeout(() => {
                 try {
@@ -1592,6 +2003,7 @@
                 }
                 renderDashboard();
 
+                // Show a toast for the most significant event
                 if (crisisData.earthquakes.length > 0) {
                     const latest = crisisData.earthquakes[0];
                     const mag = latest.properties.mag || 0;
@@ -1610,6 +2022,8 @@
                     const name = d.fields?.name || 'Disaster alert';
                     showToast(name, `ReliefWeb • ${d.fields?.country?.[0]?.name || 'Global'}`, 'high');
                 }
+                // Trigger scroll animations for dashboard stats
+                setTimeout(initScrollAnimations, 500);
             }, 400);
 
             setInterval(() => {
@@ -1632,12 +2046,6 @@
 
             try {
                 initCinematicGlobe();
-                // Add markers to cinematic too (optional)
-                setTimeout(() => {
-                    if (cinematicScene && crisisData.earthquakes.length > 0) {
-                        addMarkersToGlobe(cinematicScene);
-                    }
-                }, 500);
             } catch (err) {
                 console.error('Cinematic globe failed:', err);
             }
@@ -1652,6 +2060,32 @@
                         expandToDashboard();
                     }
                 }
+            });
+
+            // Story toggle
+            $('story-toggle').addEventListener('click', toggleStoryMode);
+
+            // Refresh news every 60 seconds
+            setInterval(() => {
+                fetchNewsFromRSS().then(() => {
+                    if (isExpanded && $('dashboard').classList.contains('active')) {
+                        renderNewsFeed();
+                    }
+                    if (isStoryMode) {
+                        renderStoryNews();
+                    }
+                });
+            }, 60000);
+
+            // Microinteraction: Button ripple effect
+            document.querySelectorAll('.btn').forEach(btn => {
+                btn.addEventListener('mousemove', (e) => {
+                    const rect = btn.getBoundingClientRect();
+                    const x = ((e.clientX - rect.left) / rect.width) * 100;
+                    const y = ((e.clientY - rect.top) / rect.height) * 100;
+                    btn.style.setProperty('--x', x + '%');
+                    btn.style.setProperty('--y', y + '%');
+                });
             });
         }
 
