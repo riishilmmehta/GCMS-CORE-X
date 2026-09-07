@@ -6,7 +6,7 @@
     <title>GCMS CORE X — Global Crisis Monitor</title>
 
     <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
 
     <!-- Three.js (Loading Screen & 3D Globe) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
@@ -49,6 +49,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/i18next/23.5.1/i18next.min.js">
     </script>
 
+    <!-- Lodash for utilities -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js">
+    </script>
+
+    <!-- Anime.js for lightweight animations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js">
+    </script>
+
     <style>
         /* ── RESET & BASE ── */
         :root {
@@ -64,10 +72,13 @@
             --high: #fb923c;
             --medium: #fbbf24;
             --low: #4ade80;
-            --glass: rgba(255, 255, 255, 0.03);
+            --glass: rgba(255, 255, 255, 0.04);
             --glass-border: rgba(255, 255, 255, 0.08);
             --glass-highlight: rgba(255, 255, 255, 0.06);
             --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --clay-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.06);
+            --glass-blur: 24px;
+            --transition-smooth: cubic-bezier(0.16, 1, 0.3, 1);
         }
 
         [data-theme="light"] {
@@ -80,6 +91,8 @@
             --glass-border: rgba(0, 0, 0, 0.08);
             --glass-highlight: rgba(0, 0, 0, 0.04);
             --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            --clay-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), inset 0 2px 4px rgba(255, 255, 255, 0.5);
+            --glass-blur: 16px;
         }
 
         * {
@@ -115,7 +128,7 @@
             background: var(--accent);
         }
 
-        /* ── LOADING SCREEN ── */
+        /* ── LOADING SCREEN (EXACTLY AS ORIGINAL) ── */
         #loader {
             position: fixed;
             inset: 0;
@@ -193,7 +206,6 @@
             letter-spacing: 0.1em;
         }
 
-        /* Loader Customization */
         .loader-custom {
             margin-top: 2rem;
             display: flex;
@@ -394,6 +406,178 @@
             }
         }
 
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(24px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @keyframes pulseRing {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(1.7);
+                opacity: 0;
+            }
+        }
+        @keyframes pulseCore {
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.5;
+            }
+            50% {
+                transform: scale(0.8);
+                opacity: 1;
+            }
+        }
+
+        /* ── GLASSMORPHISM & CLAYMORPHISM ENHANCED ── */
+        .glass-panel {
+            background: var(--glass);
+            backdrop-filter: blur(var(--glass-blur));
+            -webkit-backdrop-filter: blur(var(--glass-blur));
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            overflow: hidden;
+            transition: all 0.4s var(--transition-smooth);
+            position: relative;
+        }
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 16px;
+            padding: 1px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent 50%, rgba(255, 255, 255, 0.05));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
+        }
+        .glass-panel:hover {
+            border-color: rgba(129, 140, 248, 0.25);
+            box-shadow: var(--shadow), 0 0 40px rgba(129, 140, 248, 0.05);
+            transform: translateY(-2px);
+        }
+
+        .clay-card {
+            background: var(--glass);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--clay-shadow);
+            transition: all 0.4s var(--transition-smooth);
+            position: relative;
+            overflow: hidden;
+        }
+        .clay-card:hover {
+            transform: translateY(-4px) scale(1.01);
+            box-shadow: var(--clay-shadow), 0 12px 40px rgba(129, 140, 248, 0.08);
+        }
+        .clay-card .squash-stretch {
+            transition: transform 0.6s var(--transition-smooth);
+        }
+        .clay-card:hover .squash-stretch {
+            transform: scale(0.98) translateY(-2px);
+        }
+
+        /* ── ADVANCED CRISIS GEO-MARKERS ── */
+        .globe-pin-tooltip {
+            position: absolute;
+            z-index: 20;
+            min-width: 190px;
+            max-width: 280px;
+            padding: .65rem .75rem;
+            border: 1px solid rgba(129, 140, 248, .35);
+            border-radius: 12px;
+            background: rgba(7, 10, 24, .92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 14px 45px rgba(0, 0, 0, .65), 0 0 30px rgba(129, 140, 248, .28);
+            border-left: 3px solid #818cf8;
+            color: #f8fafc;
+            pointer-events: none;
+            opacity: 0;
+            transform: translate(-50%, calc(-100% - 16px)) scale(.94);
+            transition: opacity .18s ease, transform .18s ease;
+            font-family: Inter, sans-serif;
+        }
+        .globe-pin-tooltip.show {
+            opacity: 1;
+            transform: translate(-50%, calc(-100% - 16px)) scale(1);
+        }
+        .globe-pin-tooltip .gpt-title {
+            font: 700 .72rem Orbitron, sans-serif;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #a5b4fc;
+        }
+        .globe-pin-tooltip .gpt-place {
+            margin-top: .25rem;
+            font-size: .78rem;
+            font-weight: 600;
+            line-height: 1.25;
+        }
+        .globe-pin-tooltip .gpt-location {
+            margin-top: .28rem;
+            color: #cbd5e1;
+            font-size: .66rem;
+        }
+        .globe-pin-tooltip .gpt-meta {
+            margin-top: .35rem;
+            display: flex;
+            gap: .45rem;
+            flex-wrap: wrap;
+            font: 500 .58rem JetBrains Mono, monospace;
+            color: #94a3b8;
+        }
+
+        .leaflet-crisis-pin {
+            position: relative;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--pin-color, #ef4444);
+            border: 2px solid rgba(255, 255, 255, .92);
+            box-shadow: 0 0 0 4px color-mix(in srgb, var(--pin-color, #ef4444) 18%, transparent), 0 0 18px var(--pin-color, #ef4444);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 800;
+            transform: translate(-50%, -50%);
+        }
+        .leaflet-crisis-pin::before,
+        .leaflet-crisis-pin::after {
+            content: '';
+            position: absolute;
+            inset: -6px;
+            border: 1px solid var(--pin-color, #ef4444);
+            border-radius: 50%;
+            opacity: .55;
+            animation: mapPinPulse 1.8s ease-out infinite;
+        }
+        .leaflet-crisis-pin::after {
+            animation-delay: .9s;
+        }
+        @keyframes mapPinPulse {
+            0% {
+                transform: scale(.65);
+                opacity: .7
+            }
+            100% {
+                transform: scale(1.65);
+                opacity: 0
+            }
+        }
+
         /* ── DASHBOARD ── */
         #dashboard {
             position: relative;
@@ -403,7 +587,7 @@
             transition: opacity 1.2s ease 0.3s, visibility 1.2s;
             display: grid;
             grid-template-rows: 60px 1fr;
-            grid-template-columns: 340px 1fr 340px;
+            grid-template-columns: 360px 1fr 360px;
             grid-template-areas:
                 "header header header"
                 "left globe right";
@@ -415,6 +599,12 @@
         #dashboard.active {
             opacity: 1;
             visibility: visible;
+        }
+
+        @media (max-width: 1200px) {
+            #dashboard {
+                grid-template-columns: 300px 1fr 300px;
+            }
         }
 
         @media (max-width: 1024px) {
@@ -430,25 +620,11 @@
             .sidebar-left,
             .sidebar-right {
                 display: block !important;
-                padding: 1rem;
+                padding: 0.8rem;
             }
             .globe-area {
                 height: 60vh;
             }
-        }
-
-        .glass-panel {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            overflow: hidden;
-            transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s, background 0.3s;
-        }
-        .glass-panel:hover {
-            border-color: rgba(129, 140, 248, 0.2);
-            box-shadow: var(--shadow);
         }
 
         .dash-header {
@@ -456,9 +632,10 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 1rem;
-            background: rgba(10, 10, 26, 0.85);
-            backdrop-filter: blur(20px);
+            padding: 0 1.2rem;
+            background: rgba(10, 10, 26, 0.88);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
             border-bottom: 1px solid var(--glass-border);
             z-index: 10;
             position: sticky;
@@ -468,7 +645,7 @@
             transition: background 0.3s;
         }
         [data-theme="light"] .dash-header {
-            background: rgba(255, 255, 255, 0.85);
+            background: rgba(255, 255, 255, 0.88);
         }
 
         .header-brand {
@@ -521,12 +698,14 @@
             letter-spacing: 0.1em;
         }
 
+        /* ── ENHANCED BUTTONS ── */
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 0.3rem;
-            padding: 0.3rem 0.7rem;
-            border-radius: 30px;
+            justify-content: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.85rem;
+            border-radius: 40px;
             background: var(--glass);
             border: 1px solid var(--glass-border);
             color: var(--text-primary);
@@ -534,16 +713,32 @@
             font-size: 0.6rem;
             font-weight: 500;
             cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 0.35s var(--transition-smooth);
             position: relative;
             overflow: hidden;
             white-space: nowrap;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            letter-spacing: 0.03em;
+        }
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 40px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 60%);
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+        .btn:hover::before {
+            opacity: 1;
         }
         .btn::after {
             content: '';
             position: absolute;
             inset: 0;
-            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.12), transparent 60%);
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(129, 140, 248, 0.15), transparent 60%);
             opacity: 0;
             transition: opacity 0.4s;
             pointer-events: none;
@@ -552,28 +747,43 @@
             opacity: 1;
         }
         .btn:hover {
-            transform: translateY(-2px);
+            transform: translateY(-2px) scale(1.02);
             border-color: var(--accent);
-            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.15);
+            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.2);
+        }
+        .btn:active {
+            transform: scale(0.96);
         }
         .btn-primary {
-            background: var(--accent);
+            background: linear-gradient(135deg, var(--accent-dark), var(--accent));
             border-color: var(--accent);
-            color: #0a0a1a;
+            color: #fff;
+            font-weight: 600;
         }
         .btn-primary:hover {
-            background: var(--accent-dark);
-            border-color: var(--accent-dark);
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+            border-color: var(--accent);
             color: #fff;
+            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.35);
         }
         .btn-active {
             border-color: var(--accent);
             background: rgba(129, 140, 248, 0.15);
             color: var(--accent);
+            box-shadow: 0 0 20px rgba(129, 140, 248, 0.05);
         }
         .btn-icon {
             font-size: 0.9rem;
             line-height: 1;
+        }
+        .btn-glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent);
         }
 
         .globe-area {
@@ -617,19 +827,6 @@
         #leaflet-map.active {
             opacity: 1;
             pointer-events: auto;
-        }
-        #leaflet-map .leaflet-control-zoom {
-            border: 1px solid var(--glass-border);
-            background: rgba(10, 10, 26, 0.8);
-            backdrop-filter: blur(10px);
-        }
-        #leaflet-map .leaflet-control-zoom a {
-            color: var(--text-primary);
-            background: transparent;
-            border-color: var(--glass-border);
-        }
-        #leaflet-map .leaflet-control-zoom a:hover {
-            background: var(--glass-highlight);
         }
 
         .globe-overlay {
@@ -690,21 +887,22 @@
         .stat-card {
             background: var(--glass-highlight);
             border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            padding: 0.6rem 0.4rem;
+            border-radius: 12px;
+            padding: 0.7rem 0.4rem;
             text-align: center;
-            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s, box-shadow 0.3s;
+            transition: all 0.35s var(--transition-smooth);
             cursor: default;
+            backdrop-filter: blur(8px);
         }
         .stat-card:hover {
-            transform: translateY(-3px);
+            transform: translateY(-4px);
             border-color: var(--accent);
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow), 0 0 30px rgba(129, 140, 248, 0.05);
         }
 
         .stat-value {
             font-family: 'Orbitron', sans-serif;
-            font-size: 1.4rem;
+            font-size: 1.5rem;
             font-weight: 700;
             color: var(--text-primary);
             transition: color 0.3s;
@@ -754,12 +952,18 @@
         }
         .timeline-container input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 14px;
-            height: 14px;
+            width: 16px;
+            height: 16px;
             border-radius: 50%;
             background: var(--accent);
             cursor: pointer;
-            box-shadow: 0 0 10px var(--accent-glow);
+            box-shadow: 0 0 20px var(--accent-glow);
+            border: 2px solid var(--bg-deep);
+            transition: all 0.3s;
+        }
+        .timeline-container input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 30px var(--accent-glow);
         }
         .timeline-label {
             display: flex;
@@ -770,6 +974,7 @@
             margin-top: 0.2rem;
         }
 
+        /* ── EVENT LIST ── */
         .event-list {
             display: flex;
             flex-direction: column;
@@ -779,19 +984,20 @@
         .event-item {
             background: var(--glass);
             border: 1px solid var(--glass-border);
-            border-radius: 8px;
+            border-radius: 10px;
             padding: 0.6rem;
             cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 0.35s var(--transition-smooth);
             border-left: 3px solid transparent;
             position: relative;
             overflow: hidden;
+            backdrop-filter: blur(4px);
         }
         .event-item::before {
             content: '';
             position: absolute;
             inset: 0;
-            background: linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.02));
+            background: linear-gradient(90deg, transparent, rgba(129, 140, 248, 0.03));
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -801,7 +1007,7 @@
         .event-item:hover {
             background: var(--glass-highlight);
             border-color: rgba(129, 140, 248, 0.2);
-            transform: translateX(4px);
+            transform: translateX(4px) scale(1.01);
         }
         .event-item.critical {
             border-left-color: var(--critical);
@@ -877,20 +1083,21 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
-            max-height: 250px;
+            max-height: 260px;
             overflow-y: auto;
         }
 
         .news-item {
             padding: 0.5rem 0.6rem;
-            border-radius: 8px;
+            border-radius: 10px;
             background: var(--glass);
             border: 1px solid var(--glass-border);
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: all 0.35s var(--transition-smooth);
             cursor: pointer;
             opacity: 0;
             transform: translateY(10px);
             animation: fadeInUp 0.4s ease forwards;
+            backdrop-filter: blur(4px);
         }
         .news-item:nth-child(1) {
             animation-delay: 0.05s;
@@ -910,8 +1117,9 @@
 
         .news-item:hover {
             border-color: rgba(129, 140, 248, 0.3);
-            transform: translateX(3px) scale(1.01);
+            transform: translateX(4px) scale(1.01);
             background: var(--glass-highlight);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
         }
 
         .news-source {
@@ -1030,7 +1238,8 @@
             inset: 0;
             z-index: 200;
             background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             align-items: center;
             justify-content: center;
         }
@@ -1041,13 +1250,14 @@
         .modal-content {
             background: var(--bg-deep);
             border: 1px solid var(--glass-border);
-            border-radius: 16px;
+            border-radius: 20px;
             padding: 2rem;
-            max-width: 500px;
+            max-width: 540px;
             width: 90%;
             max-height: 80vh;
             overflow-y: auto;
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow), 0 0 60px rgba(129, 140, 248, 0.05);
+            backdrop-filter: blur(20px);
         }
         .modal-content h2 {
             font-family: 'Orbitron', sans-serif;
@@ -1080,28 +1290,29 @@
             flex-direction: column;
             gap: 0.5rem;
             pointer-events: none;
-            max-width: 360px;
+            max-width: 380px;
             width: calc(100% - 20px);
         }
 
         .toast {
-            background: rgba(10, 10, 26, 0.85);
+            background: rgba(10, 10, 26, 0.92);
             backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
             border: 1px solid var(--glass-border);
             border-left: 4px solid var(--critical);
-            border-radius: 10px;
+            border-radius: 12px;
             padding: 0.8rem 1rem;
-            box-shadow: var(--shadow);
+            box-shadow: var(--shadow), 0 0 40px rgba(0, 0, 0, 0.3);
             transform: translateX(120%);
-            animation: slideInToast 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: slideInToast 0.7s var(--transition-smooth) forwards;
             pointer-events: all;
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.4s var(--transition-smooth);
         }
         .toast:hover {
             transform: translateX(-4px) !important;
         }
         .toast.removing {
-            animation: slideOutToast 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: slideOutToast 0.5s var(--transition-smooth) forwards;
         }
 
         .toast-header {
@@ -1133,47 +1344,6 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* ── KEYFRAMES ── */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(24px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        @keyframes pulseRing {
-            0% {
-                transform: scale(1);
-                opacity: 1;
-            }
-            100% {
-                transform: scale(1.7);
-                opacity: 0;
-            }
-        }
-        @keyframes pulseCore {
-            0%,
-            100% {
-                transform: scale(1);
-                opacity: 0.5;
-            }
-            50% {
-                transform: scale(0.8);
-                opacity: 1;
-            }
-        }
-        @keyframes blink {
-            0%,
-            100% {
-                opacity: 1;
-            }
-            50% {
-                opacity: 0.3;
-            }
-        }
         @keyframes slideInToast {
             to {
                 transform: translateX(0);
@@ -1186,8 +1356,278 @@
             }
         }
 
-        .hidden {
-            display: none !important;
+        /* ── SOCIAL FEED ── */
+        .social-feed {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .social-item {
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            font-size: 0.65rem;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s;
+        }
+        .social-item:hover {
+            border-color: rgba(129, 140, 248, 0.2);
+            transform: translateX(2px);
+        }
+        .social-item .social-author {
+            font-weight: 600;
+            color: var(--accent);
+        }
+        .social-item .social-text {
+            color: var(--text-secondary);
+            margin-top: 0.1rem;
+        }
+
+        /* ── RSS FEED MANAGER ── */
+        .rss-input-group {
+            display: flex;
+            gap: 0.3rem;
+            margin-top: 0.3rem;
+        }
+        .rss-input-group input {
+            flex: 1;
+            padding: 0.35rem 0.7rem;
+            border-radius: 30px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text-primary);
+            font-size: 0.65rem;
+            outline: none;
+            backdrop-filter: blur(8px);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .rss-input-group input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(129, 140, 248, 0.05);
+        }
+        .rss-input-group .btn {
+            padding: 0.25rem 0.7rem;
+            font-size: 0.55rem;
+        }
+
+        /* ── NEWS DETAIL, FILTERS & MODALS ── */
+        .modal-close {
+            position: absolute;
+            top: 0.7rem;
+            right: 0.7rem;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            line-height: 1;
+            transition: all 0.3s;
+            z-index: 2;
+            backdrop-filter: blur(8px);
+        }
+        .modal-close:hover {
+            color: var(--critical);
+            border-color: var(--critical);
+            transform: rotate(90deg);
+        }
+        .modal-wide {
+            max-width: 640px;
+        }
+        .panel-actions {
+            display: flex;
+            gap: 0.35rem;
+            align-items: center;
+        }
+        .panel-actions .btn {
+            padding: 0.15rem 0.5rem;
+            font-size: 0.55rem;
+        }
+        #news-chips {
+            display: flex;
+            gap: 0.3rem;
+            flex-wrap: wrap;
+            padding: 0 0.3rem 0.5rem;
+        }
+        .cat-chip {
+            padding: 0.15rem 0.6rem;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text-secondary);
+            font-size: 0.5rem;
+            font-family: 'Space Grotesk', sans-serif;
+            cursor: pointer;
+            letter-spacing: 0.05em;
+            transition: all 0.3s;
+            backdrop-filter: blur(4px);
+        }
+        .cat-chip:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            transform: translateY(-1px);
+        }
+        .cat-chip.active {
+            background: rgba(129, 140, 248, 0.18);
+            border-color: var(--accent);
+            color: var(--accent);
+            box-shadow: 0 0 20px rgba(129, 140, 248, 0.05);
+        }
+        .cat-tag {
+            font-size: 0.45rem;
+            padding: 0.05rem 0.35rem;
+            border-radius: 4px;
+            background: rgba(129, 140, 248, 0.12);
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .news-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.4rem;
+        }
+        .news-search {
+            width: 100%;
+            padding: 0.35rem 0.7rem;
+            border-radius: 30px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text-primary);
+            font-size: 0.65rem;
+            outline: none;
+            margin-bottom: 0.4rem;
+            font-family: 'Inter', sans-serif;
+            backdrop-filter: blur(8px);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .news-search:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 20px rgba(129, 140, 248, 0.05);
+        }
+        .news-search::placeholder {
+            color: var(--text-muted);
+        }
+        .tone-badge {
+            font-size: 0.5rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 20px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        .tone-badge.neg {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--critical);
+        }
+        .tone-badge.pos {
+            background: rgba(74, 222, 128, 0.15);
+            color: var(--low);
+        }
+        .tone-badge.neu {
+            background: rgba(251, 191, 36, 0.15);
+            color: var(--medium);
+        }
+        #nd-image img {
+            width: 100%;
+            border-radius: 12px;
+            margin-bottom: 0.8rem;
+            max-height: 220px;
+            object-fit: cover;
+        }
+        #nd-body {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            max-height: 38vh;
+            overflow-y: auto;
+        }
+        #nd-body p {
+            margin-bottom: 0.6rem;
+        }
+        .nd-hint {
+            color: var(--text-muted);
+            font-size: 0.65rem;
+        }
+        .ed-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--glass-border);
+            font-size: 0.7rem;
+        }
+        .ed-row b {
+            color: var(--text-primary);
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .ed-row span {
+            color: var(--text-secondary);
+            text-align: right;
+            word-break: break-word;
+        }
+        .news-item.skeleton {
+            animation: shimmer 1.2s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes shimmer {
+            0% {
+                opacity: 0.35;
+            }
+            50% {
+                opacity: 0.75;
+            }
+            100% {
+                opacity: 0.35;
+            }
+        }
+
+        .crisis-score {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--critical), var(--high));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ── KINETIC TYPOGRAPHY ── */
+        .kinetic-text {
+            font-family: 'Playfair Display', serif;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #c084fc, var(--accent));
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 4s ease-in-out infinite;
+        }
+        @keyframes gradientShift {
+            0%,
+            100% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+        }
+
+        /* ── FLOATING PARTICLES BG ── */
+        #particle-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.3;
         }
 
         /* ── RESPONSIVE ── */
@@ -1218,191 +1658,257 @@
             .modal-content .shortcut-grid {
                 grid-template-columns: 1fr;
             }
+            #dashboard {
+                grid-template-rows: 52px 50vh auto auto;
+            }
         }
 
-        /* ── SOCIAL FEED ── */
-        .social-feed {
-            display: flex;
-            flex-direction: column;
-            gap: 0.4rem;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-        .social-item {
-            padding: 0.4rem 0.6rem;
-            border-radius: 6px;
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            font-size: 0.65rem;
-        }
-        .social-item .social-author {
-            font-weight: 600;
-            color: var(--accent);
-        }
-        .social-item .social-text {
-            color: var(--text-secondary);
-            margin-top: 0.1rem;
+        .hidden {
+            display: none !important;
         }
 
-        /* ── RSS FEED MANAGER ── */
-        .rss-input-group {
-            display: flex;
-            gap: 0.3rem;
-            margin-top: 0.3rem;
+        /* ── LANGUAGE SELECTOR DROPDOWN ── */
+        .lang-dropdown {
+            position: relative;
+            display: inline-block;
         }
-        .rss-input-group input {
-            flex: 1;
-            padding: 0.3rem 0.6rem;
-            border-radius: 20px;
-            border: 1px solid var(--glass-border);
-            background: var(--glass);
-            color: var(--text-primary);
-            font-size: 0.65rem;
-            outline: none;
-        }
-        .rss-input-group input:focus {
-            border-color: var(--accent);
-        }
-        .rss-input-group .btn {
-            padding: 0.2rem 0.6rem;
-            font-size: 0.55rem;
-        }
-
-        /* ── LOADER CUSTOMIZATION ── */
-        .loader-custom {
-            margin-top: 1.5rem;
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        .loader-custom label {
-            font-size: 0.65rem;
-            color: var(--text-muted);
-        }
-        .loader-custom input[type="color"] {
-            width: 28px;
-            height: 28px;
-            border: 2px solid var(--glass-border);
-            border-radius: 50%;
-            padding: 2px;
-            background: transparent;
-            cursor: pointer;
-        }
-        .loader-custom input[type="color"]::-webkit-color-swatch-wrapper {
-            padding: 0;
-        }
-        .loader-custom input[type="color"]::-webkit-color-swatch {
-            border: none;
-            border-radius: 50%;
-        }
-
-        /* ── NEWS DETAIL, FILTERS & MODALS ── */
-        .modal-close {
+        .lang-dropdown-content {
+            display: none;
             position: absolute;
-            top: 0.7rem;
-            right: 0.7rem;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
+            top: 100%;
+            right: 0;
+            background: rgba(10, 10, 26, 0.95);
+            backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
-            background: var(--glass);
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 0.75rem;
-            line-height: 1;
-            transition: all 0.25s;
-            z-index: 2;
+            border-radius: 12px;
+            padding: 0.5rem;
+            min-width: 180px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 50;
+            box-shadow: var(--shadow);
         }
-        .modal-close:hover { color: var(--critical); border-color: var(--critical); }
-        .modal-wide { max-width: 640px; }
-        .panel-actions { display: flex; gap: 0.35rem; align-items: center; }
-        .panel-actions .btn { padding: 0.15rem 0.5rem; font-size: 0.55rem; }
-        #news-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; padding: 0 0.3rem 0.5rem; }
-        .cat-chip {
-            padding: 0.15rem 0.55rem;
-            border-radius: 20px;
-            border: 1px solid var(--glass-border);
-            background: var(--glass);
+        .lang-dropdown-content.show {
+            display: block;
+        }
+        .lang-dropdown-content button {
+            display: block;
+            width: 100%;
+            padding: 0.3rem 0.6rem;
+            border: none;
+            background: transparent;
             color: var(--text-secondary);
-            font-size: 0.5rem;
-            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            font-family: 'Inter', sans-serif;
+            text-align: left;
+            border-radius: 6px;
             cursor: pointer;
-            letter-spacing: 0.05em;
             transition: all 0.2s;
         }
-        .cat-chip:hover { border-color: var(--accent); color: var(--accent); }
-        .cat-chip.active { background: rgba(129, 140, 248, 0.18); border-color: var(--accent); color: var(--accent); }
-        .cat-tag {
-            font-size: 0.45rem;
-            padding: 0.05rem 0.35rem;
-            border-radius: 4px;
-            background: rgba(129, 140, 248, 0.12);
-            color: var(--accent);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-weight: 600;
-            flex-shrink: 0;
-        }
-        .news-item-top { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; }
-        .news-search {
-            width: 100%;
-            padding: 0.35rem 0.7rem;
-            border-radius: 20px;
-            border: 1px solid var(--glass-border);
-            background: var(--glass);
+        .lang-dropdown-content button:hover {
+            background: var(--glass-highlight);
             color: var(--text-primary);
-            font-size: 0.65rem;
-            outline: none;
-            margin-bottom: 0.4rem;
-            font-family: 'Inter', sans-serif;
         }
-        .news-search:focus { border-color: var(--accent); }
-        .news-search::placeholder { color: var(--text-muted); }
-        .tone-badge {
-            font-size: 0.5rem;
-            padding: 0.15rem 0.5rem;
-            border-radius: 20px;
-            font-weight: 700;
-            letter-spacing: 0.05em;
+        .lang-dropdown-content button.active-lang {
+            color: var(--accent);
+            background: rgba(129, 140, 248, 0.1);
         }
-        .tone-badge.neg { background: rgba(239, 68, 68, 0.15); color: var(--critical); }
-        .tone-badge.pos { background: rgba(74, 222, 128, 0.15); color: var(--low); }
-        .tone-badge.neu { background: rgba(251, 191, 36, 0.15); color: var(--medium); }
-        #nd-image img { width: 100%; border-radius: 10px; margin-bottom: 0.8rem; max-height: 220px; object-fit: cover; }
-        #nd-body { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.6; max-height: 38vh; overflow-y: auto; }
-        #nd-body p { margin-bottom: 0.6rem; }
-        .nd-hint { color: var(--text-muted); font-size: 0.65rem; }
-        .ed-row {
-            display: flex;
-            justify-content: space-between;
-            gap: 1rem;
-            padding: 0.4rem 0;
-            border-bottom: 1px solid var(--glass-border);
-            font-size: 0.7rem;
-        }
-        .ed-row b { color: var(--text-primary); font-weight: 600; flex-shrink: 0; }
-        .ed-row span { color: var(--text-secondary); text-align: right; word-break: break-word; }
-        .news-item.skeleton { animation: shimmer 1.2s ease-in-out infinite; pointer-events: none; }
-        @keyframes shimmer { 0% { opacity: 0.35; } 50% { opacity: 0.75; } 100% { opacity: 0.35; } }
 
-        /* Crisis Score */
-        .crisis-score {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1.8rem;
-            font-weight: 900;
-            background: linear-gradient(135deg, var(--critical), var(--high));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+        /* =========================================================
+           iPHONE-STYLE SCROLL MORPHISM
+           Native-feeling glass header + depth response on scroll
+           ========================================================= */
+        :root {
+            --ios-morph-progress: 0;
+            --ios-morph-blur: 24px;
+            --ios-morph-y: 0px;
+            --ios-morph-scale: 1;
+            --ios-morph-radius: 16px;
         }
+
+        /* A very subtle scroll-depth atmosphere */
+        #dashboard::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            z-index: 9998;
+            pointer-events: none;
+            transform-origin: left center;
+            transform: scaleX(var(--ios-morph-progress));
+            background: linear-gradient(90deg, transparent, var(--accent), #a5b4fc, transparent);
+            box-shadow: 0 0 14px var(--accent-glow);
+            opacity: 0.8;
+        }
+
+        .dash-header {
+            --morph-bg: rgba(10, 10, 26, 0.88);
+            transform: translate3d(0, var(--ios-morph-y), 0) scale(var(--ios-morph-scale));
+            transform-origin: center top;
+            border-radius: var(--ios-morph-radius);
+            transition:
+                background 0.35s ease,
+                border-color 0.35s ease,
+                box-shadow 0.45s cubic-bezier(.22,1,.36,1),
+                backdrop-filter 0.45s ease,
+                -webkit-backdrop-filter 0.45s ease,
+                border-radius 0.45s cubic-bezier(.22,1,.36,1),
+                padding 0.45s cubic-bezier(.22,1,.36,1),
+                margin 0.45s cubic-bezier(.22,1,.36,1),
+                transform 0.08s linear;
+            will-change: transform, border-radius, box-shadow, backdrop-filter;
+            isolation: isolate;
+        }
+
+        .dash-header::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: -1;
+            border-radius: inherit;
+            background:
+                radial-gradient(circle at 15% 0%, rgba(255,255,255,.11), transparent 32%),
+                radial-gradient(circle at 85% 100%, rgba(129,140,248,.10), transparent 36%),
+                linear-gradient(135deg, rgba(255,255,255,.055), transparent 45%);
+            opacity: calc(.35 + var(--ios-morph-progress) * .65);
+            pointer-events: none;
+            transition: opacity .35s ease;
+        }
+
+        .dash-header::after {
+            content: '';
+            position: absolute;
+            left: 7%;
+            right: 7%;
+            bottom: -1px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,.18), var(--accent), rgba(255,255,255,.18), transparent);
+            opacity: calc(.25 + var(--ios-morph-progress) * .75);
+            filter: blur(.15px);
+            pointer-events: none;
+        }
+
+        #dashboard.scroll-morphed .dash-header {
+            background: rgba(10, 10, 26, .68);
+            border: 1px solid rgba(255,255,255,.12);
+            box-shadow:
+                0 12px 38px rgba(0,0,0,.34),
+                0 2px 0 rgba(255,255,255,.06) inset,
+                0 0 35px rgba(129,140,248,.055);
+            backdrop-filter: blur(34px) saturate(145%);
+            -webkit-backdrop-filter: blur(34px) saturate(145%);
+        }
+
+        [data-theme="light"] #dashboard.scroll-morphed .dash-header {
+            background: rgba(255,255,255,.72);
+            box-shadow:
+                0 12px 38px rgba(15,23,42,.13),
+                0 2px 0 rgba(255,255,255,.72) inset,
+                0 0 35px rgba(79,70,229,.06);
+        }
+
+        #dashboard.scroll-morphed .header-brand {
+            text-shadow: 0 0 18px rgba(129,140,248,.22);
+        }
+
+        #dashboard.scroll-morphed .header-meta .btn {
+            box-shadow: 0 3px 15px rgba(0,0,0,.12);
+        }
+
+        /* Soft depth / clay response */
+        #dashboard.scroll-morphed .glass-panel {
+            border-radius: 20px;
+            box-shadow:
+                0 10px 30px rgba(0,0,0,.20),
+                0 1px 0 rgba(255,255,255,.045) inset;
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+        }
+
+        #dashboard.scroll-morphed .clay-card {
+            box-shadow:
+                0 12px 30px rgba(0,0,0,.24),
+                0 2px 0 rgba(255,255,255,.045) inset,
+                inset 0 -3px 8px rgba(0,0,0,.06);
+        }
+
+        #dashboard.scroll-morphed .event-item,
+        #dashboard.scroll-morphed .news-item,
+        #dashboard.scroll-morphed .social-item {
+            border-radius: 14px;
+            box-shadow: 0 7px 20px rgba(0,0,0,.12);
+        }
+
+        #dashboard.scroll-morphed .btn {
+            box-shadow:
+                0 4px 16px rgba(0,0,0,.12),
+                0 1px 0 rgba(255,255,255,.06) inset;
+        }
+
+        /* The header becomes a compact iOS-like island on smaller screens. */
+        @media (max-width: 700px) {
+            #dashboard.scroll-morphed .dash-header {
+                margin: 6px 9px 0;
+                width: calc(100% - 18px);
+                min-height: 48px;
+                padding: 0 .72rem;
+                border-radius: 22px;
+                gap: .2rem;
+            }
+
+            #dashboard.scroll-morphed .header-brand {
+                font-size: .78rem;
+                letter-spacing: .075em;
+            }
+
+            #dashboard.scroll-morphed .header-brand span[style] {
+                display: none;
+            }
+
+            #dashboard.scroll-morphed .header-meta {
+                gap: .25rem;
+            }
+
+            #dashboard.scroll-morphed .header-meta > #clock,
+            #dashboard.scroll-morphed .header-meta > .live-badge,
+            #dashboard.scroll-morphed .header-meta > .status-dot {
+                display: none;
+            }
+
+            #dashboard.scroll-morphed .header-meta .btn {
+                padding: .3rem .52rem;
+                min-width: 31px;
+                border-radius: 18px;
+            }
+
+            #dashboard.scroll-morphed .header-meta .btn:not(#map-toggle):not(#theme-toggle):not(#fullscreen-toggle) {
+                font-size: 0;
+            }
+
+            #dashboard.scroll-morphed .header-meta .btn:not(#map-toggle):not(#theme-toggle):not(#fullscreen-toggle) .btn-icon {
+                font-size: .9rem;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .dash-header {
+                transition: background .2s ease, border-color .2s ease, box-shadow .2s ease;
+                transform: none !important;
+            }
+
+            #dashboard::before {
+                display: none;
+            }
+        }
+
     </style>
-<base target="_blank">
+    <base target="_blank">
 </head>
 <body>
 
-    <!-- LOADING SCREEN -->
+    <!-- LOADING SCREEN (100% ORIGINAL) -->
     <div id="loader">
         <canvas id="loader-canvas"></canvas>
         <div class="loader-content">
@@ -1440,7 +1946,7 @@
         <div class="dash-header">
             <div class="header-brand">
                 <span class="brand-icon">◆</span> GCMS CORE X
-                <span style="font-size:0.5rem;font-weight:400;color:var(--text-muted);margin-left:0.3rem;">v4.0</span>
+                <span style="font-size:0.5rem;font-weight:400;color:var(--text-muted);margin-left:0.3rem;">v5.0</span>
             </div>
             <div class="header-meta">
                 <span class="status-dot"></span>
@@ -1448,7 +1954,10 @@
                 <span id="clock">00:00:00 UTC</span>
                 <button class="btn" id="map-toggle" title="Toggle 3D/2D">🌍 3D</button>
                 <button class="btn" id="theme-toggle" title="Toggle Dark/Light">🌓</button>
-                <button class="btn" id="lang-toggle" title="Toggle Language">EN</button>
+                <div class="lang-dropdown">
+                    <button class="btn" id="lang-toggle" title="Toggle Language">🌐 EN</button>
+                    <div class="lang-dropdown-content" id="lang-dropdown-content"></div>
+                </div>
                 <button class="btn" id="fullscreen-toggle" title="Fullscreen">⛶</button>
                 <button class="btn" id="pdf-export" title="Export PDF">📄</button>
                 <button class="btn" id="voice-toggle" title="Voice Commands">🎤</button>
@@ -1462,34 +1971,34 @@
             <div class="glass-panel" style="padding: 0.8rem;">
                 <div class="panel-title">Crisis Overview</div>
                 <div class="stat-grid">
-                    <div class="stat-card">
+                    <div class="stat-card clay-card">
                         <div class="stat-value critical glow" id="stat-active">0</div>
                         <div class="stat-label">Active Events</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card clay-card">
                         <div class="stat-value high glow" id="stat-alerts">0</div>
                         <div class="stat-label">Alerts</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card clay-card">
                         <div class="stat-value" id="stat-confidence">94%</div>
                         <div class="stat-label">Confidence</div>
                     </div>
-                    <div class="stat-card">
+                    <div class="stat-card clay-card">
                         <div class="stat-value crisis-score" id="stat-score">0</div>
                         <div class="stat-label">Crisis Score</div>
                     </div>
                 </div>
                 <div class="timeline-container">
-                    <input type="range" id="timeline-slider" min="0" max="7" value="7" step="1" />
+                    <input type="range" id="timeline-slider" min="0" max="30" value="7" step="1" />
                     <div class="timeline-label">
-                        <span>7d ago</span>
+                        <span>30d ago</span>
                         <span id="timeline-label">Now</span>
                     </div>
                 </div>
             </div>
 
             <div class="glass-panel" style="padding: 0.8rem; flex: 1; min-height: 0;">
-                <div class="panel-title">Recent Events</div>
+                <div class="panel-title">Recent Major Crises</div>
                 <div class="event-list" id="event-list"></div>
             </div>
         </div>
@@ -1500,6 +2009,8 @@
                 <div id="leaflet-map"></div>
             </div>
             <div class="globe-overlay"></div>
+            <!-- Particle background overlay -->
+            <canvas id="particle-bg"></canvas>
         </div>
 
         <div class="sidebar-right">
@@ -1509,8 +2020,8 @@
             </div>
 
             <div class="glass-panel" style="padding: 0.8rem;">
-                <div class="panel-title">AI Summary <button class="btn" id="ai-summary-btn" style="font-size:0.5rem;">Generate</button></div>
-                <div id="ai-summary-text" style="font-size:0.7rem;color:var(--text-secondary);line-height:1.5;min-height:40px;">
+                <div class="panel-title">AI Summary <button class="btn btn-primary" id="ai-summary-btn" style="font-size:0.5rem;">Generate</button></div>
+                <div id="ai-summary-text" style="font-size:0.7rem;color:var(--text-secondary);line-height:1.6;min-height:40px;">
                     Click Generate for a crisis brief.
                 </div>
             </div>
@@ -1548,12 +2059,12 @@
     <div id="story-mode">
         <section class="story-slide" data-animate="fade-up">
             <div class="story-content">
-                <h2>🌍 Weekly Crisis Brief</h2>
-                <p>Interactive narrative powered by real‑time data.</p>
+                <h2 class="kinetic-text">🌍 Weekly Crisis Brief</h2>
+                <p>Interactive narrative powered by real‑time data and generative animation.</p>
                 <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:2rem;">
-                    <div class="stat-card"><div class="stat-value" style="font-size:2rem;" id="story-events">0</div><div class="stat-label">Events</div></div>
-                    <div class="stat-card"><div class="stat-value" style="font-size:2rem;color:var(--critical);" id="story-critical">0</div><div class="stat-label">Critical</div></div>
-                    <div class="stat-card"><div class="stat-value" style="font-size:2rem;color:var(--high);" id="story-high">0</div><div class="stat-label">High</div></div>
+                    <div class="stat-card clay-card"><div class="stat-value" style="font-size:2rem;" id="story-events">0</div><div class="stat-label">Events</div></div>
+                    <div class="stat-card clay-card"><div class="stat-value" style="font-size:2rem;color:var(--critical);" id="story-critical">0</div><div class="stat-label">Critical</div></div>
+                    <div class="stat-card clay-card"><div class="stat-value" style="font-size:2rem;color:var(--high);" id="story-high">0</div><div class="stat-label">High</div></div>
                 </div>
             </div>
         </section>
@@ -1569,8 +2080,8 @@
                 <h2>🌊 Humanitarian Impact</h2>
                 <p>Millions affected. Displacement and aid needs are rising.</p>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:500px;margin:1.5rem auto;">
-                    <div class="stat-card"><span class="stat-value" style="font-size:1.8rem;color:var(--critical);">2.4M</span><span class="stat-label">Displaced</span></div>
-                    <div class="stat-card"><span class="stat-value" style="font-size:1.8rem;color:var(--high);">$1.2B</span><span class="stat-label">Aid Needed</span></div>
+                    <div class="stat-card clay-card"><span class="stat-value" style="font-size:1.8rem;color:var(--critical);">2.4M</span><span class="stat-label">Displaced</span></div>
+                    <div class="stat-card clay-card"><span class="stat-value" style="font-size:1.8rem;color:var(--high);">$1.2B</span><span class="stat-label">Aid Needed</span></div>
                 </div>
             </div>
         </section>
@@ -1598,7 +2109,7 @@
                 <span><kbd>L</kbd> Language Toggle</span>
                 <span><kbd>?</kbd> This Menu</span>
             </div>
-            <button class="btn" style="margin-top:1rem;" onclick="document.getElementById('shortcuts-modal').classList.remove('active')">Close</button>
+            <button class="btn btn-primary" style="margin-top:1rem;" onclick="document.getElementById('shortcuts-modal').classList.remove('active')">Close</button>
         </div>
     </div>
 
@@ -1675,6 +2186,108 @@
         let gdeltConflicts = [];
         let newsFilter = 'All';
         let newsSearch = '';
+        let particleAnim = null;
+
+        // ==========================================
+        // 50+ LANGUAGES
+        // ==========================================
+        const LANGUAGES = [
+            { code: 'en', name: 'English', native: 'English' },
+            { code: 'es', name: 'Spanish', native: 'Español' },
+            { code: 'fr', name: 'French', native: 'Français' },
+            { code: 'de', name: 'German', native: 'Deutsch' },
+            { code: 'it', name: 'Italian', native: 'Italiano' },
+            { code: 'pt', name: 'Portuguese', native: 'Português' },
+            { code: 'ru', name: 'Russian', native: 'Русский' },
+            { code: 'zh', name: 'Chinese', native: '中文' },
+            { code: 'ja', name: 'Japanese', native: '日本語' },
+            { code: 'ko', name: 'Korean', native: '한국어' },
+            { code: 'ar', name: 'Arabic', native: 'العربية' },
+            { code: 'hi', name: 'Hindi', native: 'हिन्दी' },
+            { code: 'bn', name: 'Bengali', native: 'বাংলা' },
+            { code: 'ur', name: 'Urdu', native: 'اردو' },
+            { code: 'fa', name: 'Persian', native: 'فارسی' },
+            { code: 'tr', name: 'Turkish', native: 'Türkçe' },
+            { code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt' },
+            { code: 'th', name: 'Thai', native: 'ไทย' },
+            { code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia' },
+            { code: 'ms', name: 'Malay', native: 'Bahasa Melayu' },
+            { code: 'tl', name: 'Tagalog', native: 'Tagalog' },
+            { code: 'pl', name: 'Polish', native: 'Polski' },
+            { code: 'uk', name: 'Ukrainian', native: 'Українська' },
+            { code: 'ro', name: 'Romanian', native: 'Română' },
+            { code: 'nl', name: 'Dutch', native: 'Nederlands' },
+            { code: 'el', name: 'Greek', native: 'Ελληνικά' },
+            { code: 'cs', name: 'Czech', native: 'Čeština' },
+            { code: 'sv', name: 'Swedish', native: 'Svenska' },
+            { code: 'hu', name: 'Hungarian', native: 'Magyar' },
+            { code: 'fi', name: 'Finnish', native: 'Suomi' },
+            { code: 'da', name: 'Danish', native: 'Dansk' },
+            { code: 'no', name: 'Norwegian', native: 'Norsk' },
+            { code: 'he', name: 'Hebrew', native: 'עברית' },
+            { code: 'am', name: 'Amharic', native: 'አማርኛ' },
+            { code: 'sw', name: 'Swahili', native: 'Kiswahili' },
+            { code: 'ta', name: 'Tamil', native: 'தமிழ்' },
+            { code: 'te', name: 'Telugu', native: 'తెలుగు' },
+            { code: 'mr', name: 'Marathi', native: 'मराठी' },
+            { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી' },
+            { code: 'kn', name: 'Kannada', native: 'ಕನ್ನಡ' },
+            { code: 'ml', name: 'Malayalam', native: 'മലയാളം' },
+            { code: 'ne', name: 'Nepali', native: 'नेपाली' },
+            { code: 'si', name: 'Sinhala', native: 'සිංහල' },
+            { code: 'my', name: 'Burmese', native: 'မြန်မာဘာသာ' },
+            { code: 'km', name: 'Khmer', native: 'ភាសាខ្មែរ' },
+            { code: 'lo', name: 'Lao', native: 'ພາສາລາວ' },
+            { code: 'mn', name: 'Mongolian', native: 'Монгол' },
+            { code: 'ka', name: 'Georgian', native: 'ქართული' },
+            { code: 'hy', name: 'Armenian', native: 'Հայերեն' },
+            { code: 'sq', name: 'Albanian', native: 'Shqip' },
+            { code: 'bs', name: 'Bosnian', native: 'Bosanski' },
+            { code: 'hr', name: 'Croatian', native: 'Hrvatski' },
+            { code: 'sr', name: 'Serbian', native: 'Српски' },
+            { code: 'sk', name: 'Slovak', native: 'Slovenčina' },
+            { code: 'sl', name: 'Slovenian', native: 'Slovenščina' },
+            { code: 'et', name: 'Estonian', native: 'Eesti' },
+            { code: 'lv', name: 'Latvian', native: 'Latviešu' },
+            { code: 'lt', name: 'Lithuanian', native: 'Lietuvių' },
+            { code: 'is', name: 'Icelandic', native: 'Íslenska' },
+            { code: 'af', name: 'Afrikaans', native: 'Afrikaans' }
+        ];
+
+        const translations = {
+            en: { title: 'GCMS CORE X', live: 'LIVE', story: 'Story', alerts: 'Alerts', news: 'News', summary: 'Summary' },
+            es: { title: 'GCMS CORE X', live: 'EN VIVO', story: 'Historia', alerts: 'Alertas', news: 'Noticias',
+                summary: 'Resumen' },
+            fr: { title: 'GCMS CORE X', live: 'EN DIRECT', story: 'Histoire', alerts: 'Alertes', news: 'Actualités',
+                summary: 'Résumé' },
+            de: { title: 'GCMS CORE X', live: 'LIVE', story: 'Geschichte', alerts: 'Alarme', news: 'Nachrichten',
+                summary: 'Zusammenfassung' },
+            it: { title: 'GCMS CORE X', live: 'IN DIRETTA', story: 'Storia', alerts: 'Allarmi', news: 'Notizie',
+                summary: 'Sommario' },
+            pt: { title: 'GCMS CORE X', live: 'AO VIVO', story: 'História', alerts: 'Alertas', news: 'Notícias',
+                summary: 'Resumo' },
+            ru: { title: 'GCMS CORE X', live: 'В ПРЯМОМ ЭФИРЕ', story: 'История', alerts: 'Оповещения', news: 'Новости',
+                summary: 'Сводка' },
+            zh: { title: 'GCMS CORE X', live: '直播', story: '故事', alerts: '警报', news: '新闻', summary: '摘要' },
+            ja: { title: 'GCMS CORE X', live: 'ライブ', story: 'ストーリー', alerts: 'アラート', news: 'ニュース',
+                summary: 'サマリー' },
+            ko: { title: 'GCMS CORE X', live: '라이브', story: '스토리', alerts: '경보', news: '뉴스', summary: '요약' },
+            ar: { title: 'GCMS CORE X', live: 'مباشر', story: 'قصة', alerts: 'تنبيهات', news: 'أخبار', summary: 'ملخص' },
+            hi: { title: 'GCMS CORE X', live: 'लाइव', story: 'कहानी', alerts: 'अलर्ट', news: 'समाचार', summary: 'सारांश' },
+            bn: { title: 'GCMS CORE X', live: 'লাইভ', story: 'গল্প', alerts: 'সতর্কতা', news: 'সংবাদ', summary: 'সারাংশ' },
+            ur: { title: 'GCMS CORE X', live: 'براہ راست', story: 'کہانی', alerts: 'انتباہات', news: 'خبریں',
+                summary: 'خلاصہ' },
+            fa: { title: 'GCMS CORE X', live: 'زنده', story: 'داستان', alerts: 'هشدارها', news: 'اخبار', summary: 'خلاصه' },
+            tr: { title: 'GCMS CORE X', live: 'CANLI', story: 'Hikaye', alerts: 'Uyarılar', news: 'Haberler',
+                summary: 'Özet' },
+            vi: { title: 'GCMS CORE X', live: 'TRỰC TIẾP', story: 'Câu chuyện', alerts: 'Cảnh báo', news: 'Tin tức',
+                summary: 'Tóm tắt' },
+            th: { title: 'GCMS CORE X', live: 'สด', story: 'เรื่องราว', alerts: 'แจ้งเตือน', news: 'ข่าว', summary: 'สรุป' },
+            id: { title: 'GCMS CORE X', live: 'LIVE', story: 'Cerita', alerts: 'Peringatan', news: 'Berita',
+                summary: 'Ringkasan' },
+            ms: { title: 'GCMS CORE X', live: 'LANGSUNG', story: 'Cerita', alerts: 'Amaran', news: 'Berita',
+                summary: 'Ringkasan' }
+        };
 
         // ==========================================
         // UTILITIES
@@ -1691,7 +2304,8 @@
             if (s < 60) return 'Just now';
             if (s < 3600) return Math.floor(s / 60) + 'm ago';
             if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-            return Math.floor(s / 86400) + 'd ago';
+            if (s < 604800) return Math.floor(s / 86400) + 'd ago';
+            return Math.floor(s / 604800) + 'w ago';
         }
 
         function severityFromMag(mag) {
@@ -1711,7 +2325,7 @@
         }
 
         // ==========================================
-        // THREE.JS LOADING SCREEN
+        // THREE.JS LOADING SCREEN (ORIGINAL)
         // ==========================================
         function initLoader() {
             const canvas = $('loader-canvas');
@@ -1759,7 +2373,6 @@
 
             camera.position.z = 5.5;
 
-            // Loader color customization
             const colorPicker = $('loader-color');
             colorPicker.addEventListener('input', (e) => {
                 const c = new THREE.Color(e.target.value);
@@ -1803,7 +2416,7 @@
             try {
                 updateLoader(10, 'USGS...');
                 const res = await fetch(
-                'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson');
+                    'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson');
                 const data = await res.json();
                 results.earthquakes = data.features || [];
             } catch (e) { console.warn('USGS failed', e); }
@@ -1812,7 +2425,7 @@
                 updateLoader(25, 'ReliefWeb...');
                 const res = await fetch(
                     'https://api.reliefweb.int/v1/disasters?appname=gcms-core-x&limit=6&profile=full&preset=latest&fields[include]=name,country,date,status,type,url'
-                    );
+                );
                 const data = await res.json();
                 results.disasters = data.data || [];
             } catch (e) { console.warn('ReliefWeb failed', e); }
@@ -1862,33 +2475,47 @@
         }
 
         // ==========================================
-        // NEWS FETCHER (Multi-source: GDELT + Google News + RSS fallbacks)
+        // NEWS FETCHER
         // ==========================================
         function parseGDELTDate(s) {
             if (!s || s.length < 8) return new Date();
-            const y = +s.slice(0, 4), mo = +s.slice(4, 6) - 1, d = +s.slice(6, 8);
-            const h = s.length >= 10 ? +s.slice(8, 10) : 0, mi = s.length >= 12 ? +s.slice(10, 12) : 0;
+            const y = +s.slice(0, 4),
+                mo = +s.slice(4, 6) - 1,
+                d = +s.slice(6, 8);
+            const h = s.length >= 10 ? +s.slice(8, 10) : 0,
+                mi = s.length >= 12 ? +s.slice(10, 12) : 0;
             return new Date(Date.UTC(y, mo, d, h, mi));
         }
 
         function categorize(title) {
             const t = (title || '').toLowerCase();
-            if (/(earthquake|flood|hurricane|typhoon|cyclone|wildfire|wild fire|tsunami|volcano|landslide|tornado|drought|monsoon|avalanche)/.test(t)) return 'Disaster';
-            if (/(war|conflict|missile|strike|troops|ceasefire|bomb|attack|militar|invasion|clash|airstrike|artillery|hostage|shelling)/.test(t)) return 'Conflict';
-            if (/(covid|coronavirus|virus|outbreak|vaccine|hospital|disease|ebola|mpox|malaria|cholera)/.test(t)) return 'Health';
-            if (/(climate|warming|emissions|renewable|heatwave|heat wave|glacier|carbon|sea level)/.test(t)) return 'Climate';
-            if (/(election|president|parliament|sanction|minister|diplomat|summit|nato|united nations|\bvote\b|protest)/.test(t)) return 'Politics';
-            if (/(market|economy|inflation|trade|oil price|stock|recession|bank|currency)/.test(t)) return 'Economy';
+            if (/(earthquake|flood|hurricane|typhoon|cyclone|wildfire|wild fire|tsunami|volcano|landslide|tornado|drought|monsoon|avalanche)/.test(t))
+                return 'Disaster';
+            if (/(war|conflict|missile|strike|troops|ceasefire|bomb|attack|militar|invasion|clash|airstrike|artillery|hostage|shelling)/.test(t))
+                return 'Conflict';
+            if (/(covid|coronavirus|virus|outbreak|vaccine|hospital|disease|ebola|mpox|malaria|cholera)/.test(t))
+                return 'Health';
+            if (/(climate|warming|emissions|renewable|heatwave|heat wave|glacier|carbon|sea level)/.test(t))
+                return 'Climate';
+            if (/(election|president|parliament|sanction|minister|diplomat|summit|nato|united nations|\bvote\b|protest)/.test(t))
+                return 'Politics';
+            if (/(market|economy|inflation|trade|oil price|stock|recession|bank|currency)/.test(t))
+                return 'Economy';
             return 'World';
         }
 
         const FALLBACK_NEWS = [
-            { title: 'UN warns of rising global humanitarian needs as crises multiply across regions', source: 'UN News', link: 'https://news.un.org/en/', category: 'World' },
-            { title: 'Red Cross appeals for emergency funding amid surge in climate disasters', source: 'IFRC', link: 'https://www.ifrc.org/', category: 'Disaster' },
-            { title: 'Calls for ceasefire intensify as fighting continues in active conflict zones', source: 'ReliefWeb', link: 'https://reliefweb.int/', category: 'Conflict' },
-            { title: 'WHO monitors emerging health threats and outbreak risks worldwide', source: 'WHO', link: 'https://www.who.int/', category: 'Health' },
-            { title: 'Climate extremes displace record numbers of people, aid agencies report', source: 'UNHCR', link: 'https://www.unhcr.org/', category: 'Climate' }
-        ].map(a => ({ ...a, time: new Date(), image: null, tone: null, language: 'en' }));
+            { title: 'UN warns of rising global humanitarian needs as crises multiply across regions', source: 'UN News',
+                link: 'https://news.un.org/en/', category: 'World', time: new Date() },
+            { title: 'Red Cross appeals for emergency funding amid surge in climate disasters', source: 'IFRC',
+                link: 'https://www.ifrc.org/', category: 'Disaster', time: new Date() },
+            { title: 'Calls for ceasefire intensify as fighting continues in active conflict zones', source: 'ReliefWeb',
+                link: 'https://reliefweb.int/', category: 'Conflict', time: new Date() },
+            { title: 'WHO monitors emerging health threats and outbreak risks worldwide', source: 'WHO',
+                link: 'https://www.who.int/', category: 'Health', time: new Date() },
+            { title: 'Climate extremes displace record numbers of people, aid agencies report', source: 'UNHCR',
+                link: 'https://www.unhcr.org/', category: 'Climate', time: new Date() }
+        ];
 
         async function fetchNewsFromRSS() {
             const feedEl = $('news-feed');
@@ -1900,7 +2527,7 @@
 
             let allArticles = [];
 
-            // ── Source 1: GDELT DOC 2.0 — rich metadata (domain, tone, language, image) ──
+            // GDELT
             const gdeltQueries = [
                 '(conflict OR war OR airstrike OR ceasefire OR missile) sourcelang:english',
                 '(earthquake OR flood OR hurricane OR wildfire OR tsunami) sourcelang:english',
@@ -1930,7 +2557,7 @@
                 } catch (e) { console.warn('GDELT doc query failed:', q); }
             }
 
-            // ── Source 2: Google News RSS via allorigins CORS proxy ──
+            // RSS feeds
             const rssUrls = ['https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en', ...customFeeds];
             for (const feedUrl of rssUrls) {
                 try {
@@ -1949,18 +2576,20 @@
                             source: srcEl ? srcEl.textContent : 'Google News',
                             time: new Date(item.querySelector('pubDate')?.textContent || Date.now()),
                             link: item.querySelector('link')?.textContent || '#',
-                            image: null, tone: null, language: 'en',
+                            image: null,
+                            tone: null,
+                            language: 'en',
                             category: categorize(t)
                         });
                     });
                 } catch (e) { console.warn('RSS via allorigins failed:', feedUrl); }
             }
 
-            // ── Source 3: rss2json fallback for custom feeds ──
             if (allArticles.length < 8) {
                 for (const feedUrl of customFeeds) {
                     try {
-                        const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`;
+                        const proxyUrl =
+                            `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`;
                         const res = await fetch(proxyUrl);
                         if (res.ok) {
                             const data = await res.json();
@@ -1971,7 +2600,9 @@
                                         source: item.source || item.author || 'RSS',
                                         time: new Date(item.pubDate),
                                         link: item.link,
-                                        image: null, tone: null, language: 'en',
+                                        image: null,
+                                        tone: null,
+                                        language: 'en',
                                         category: categorize(item.title)
                                     });
                                 });
@@ -1981,13 +2612,12 @@
                 }
             }
 
-            // ── Fallback: curated crisis brief so the app never renders empty ──
             if (allArticles.length === 0) {
                 allArticles = FALLBACK_NEWS.slice();
-                if (isExpanded) showToast('📡 News Fallback', 'Live feeds unreachable — showing curated crisis brief.', 'medium');
+                if (isExpanded) showToast('📡 News Fallback', 'Live feeds unreachable — showing curated crisis brief.',
+                    'medium');
             }
 
-            // Dedupe + sort newest first
             const seen = new Set();
             newsArticles = allArticles
                 .filter(a => a.title && a.title.length > 12 && !a.title.toLowerCase().includes('advertisement'))
@@ -2008,7 +2638,7 @@
         }
 
         // ==========================================
-        // SOCIAL FEED (Reddit)
+        // SOCIAL FEED
         // ==========================================
         async function fetchSocialFeed() {
             try {
@@ -2032,7 +2662,8 @@
             const container = $('social-feed');
             if (!container) return;
             if (socialPosts.length === 0) {
-                container.innerHTML = `<div class="social-item"><span class="social-author">No posts</span></div>`;
+                container.innerHTML =
+                    `<div class="social-item"><span class="social-author">No posts</span></div>`;
                 return;
             }
             container.innerHTML = socialPosts.map(p => `
@@ -2044,7 +2675,7 @@
         }
 
         // ==========================================
-        // COVID-19 DATA
+        // COVID DATA
         // ==========================================
         async function fetchCOVIDData() {
             try {
@@ -2074,15 +2705,153 @@
         }
 
         // ==========================================
-        // HISTORICAL DATA (Mock)
+        // HISTORICAL DATA
         // ==========================================
         async function fetchHistoricalData() {
-            // Mock historical comparison
             console.log('📊 Historical data loaded (mock)');
         }
 
         // ==========================================
-        // AI SUMMARY (Mock)
+        // REAL CRISIS DATA (Major Recent Crises)
+        // ==========================================
+        const REAL_CRISES = [{
+            title: 'Turkey-Syria Earthquakes',
+            type: 'Earthquake',
+            severity: 'critical',
+            region: 'Turkey, Syria',
+            time: new Date('2023-02-06T01:17:00Z'),
+            source: 'USGS',
+            mag: 7.8,
+            lat: 37.226,
+            lon: 37.014,
+            deaths: '50,000+',
+            description: 'Devastating 7.8 magnitude earthquake killed tens of thousands.'
+        }, {
+            title: 'Ukraine-Russia War',
+            type: 'Conflict',
+            severity: 'critical',
+            region: 'Ukraine',
+            time: new Date('2022-02-24T00:00:00Z'),
+            source: 'GDELT',
+            lat: 48.3794,
+            lon: 31.1656,
+            deaths: 'Hundreds of thousands',
+            description: 'Full-scale invasion with massive humanitarian toll.'
+        }, {
+            title: 'Gaza-Israel Conflict',
+            type: 'Conflict',
+            severity: 'critical',
+            region: 'Gaza, Israel',
+            time: new Date('2023-10-07T00:00:00Z'),
+            source: 'GDELT',
+            lat: 31.3189,
+            lon: 34.4691,
+            deaths: '40,000+',
+            description: 'Escalated conflict with extensive civilian casualties.'
+        }, {
+            title: 'Sudan Conflict',
+            type: 'Conflict',
+            severity: 'high',
+            region: 'Sudan',
+            time: new Date('2023-04-15T00:00:00Z'),
+            source: 'ReliefWeb',
+            lat: 15.5007,
+            lon: 32.5599,
+            deaths: '15,000+',
+            description: 'Fighting between rival military factions displacing millions.'
+        }, {
+            title: 'Myanmar Civil War',
+            type: 'Conflict',
+            severity: 'high',
+            region: 'Myanmar',
+            time: new Date('2021-02-01T00:00:00Z'),
+            source: 'ReliefWeb',
+            lat: 21.9162,
+            lon: 95.9560,
+            deaths: '50,000+',
+            description: 'Ongoing civil conflict after military coup.'
+        }, {
+            title: 'Haiti Gang Violence',
+            type: 'Conflict',
+            severity: 'high',
+            region: 'Haiti',
+            time: new Date('2023-01-01T00:00:00Z'),
+            source: 'UN News',
+            lat: 18.9712,
+            lon: -72.2852,
+            deaths: '5,000+',
+            description: 'Escalating gang violence and humanitarian crisis.'
+        }, {
+            title: 'Congo Conflict',
+            type: 'Conflict',
+            severity: 'high',
+            region: 'DR Congo',
+            time: new Date('2022-01-01T00:00:00Z'),
+            source: 'ReliefWeb',
+            lat: -1.6741,
+            lon: 29.2505,
+            deaths: 'Millions displaced',
+            description: 'Ongoing conflict in eastern DRC with mass displacement.'
+        }, {
+            title: 'Yemen Civil War',
+            type: 'Conflict',
+            severity: 'high',
+            region: 'Yemen',
+            time: new Date('2014-09-01T00:00:00Z'),
+            source: 'UN News',
+            lat: 15.5527,
+            lon: 48.5164,
+            deaths: 'Hundreds of thousands',
+            description: 'Protracted conflict causing world\'s worst humanitarian crisis.'
+        }, {
+            title: 'Afghanistan Crisis',
+            type: 'Crisis',
+            severity: 'high',
+            region: 'Afghanistan',
+            time: new Date('2021-08-15T00:00:00Z'),
+            source: 'UN News',
+            lat: 33.9391,
+            lon: 67.7100,
+            deaths: 'Millions in need',
+            description: 'Humanitarian crisis after Taliban takeover.'
+        }, {
+            title: 'Pakistan Floods',
+            type: 'Disaster',
+            severity: 'critical',
+            region: 'Pakistan',
+            time: new Date('2022-06-15T00:00:00Z'),
+            source: 'ReliefWeb',
+            lat: 28.5000,
+            lon: 70.0000,
+            deaths: '1,700+',
+            description: 'Catastrophic floods affecting 33 million people.'
+        }, {
+            title: 'Ethiopia-Tigray War',
+            type: 'Conflict',
+            severity: 'high',
+            region: 'Ethiopia',
+            time: new Date('2020-11-04T00:00:00Z'),
+            source: 'ReliefWeb',
+            lat: 13.5000,
+            lon: 39.5000,
+            deaths: '500,000+',
+            description: 'Deadly conflict in Tigray region.'
+        }, {
+            title: 'Morocco Earthquake',
+            type: 'Earthquake',
+            severity: 'high',
+            region: 'Morocco',
+            time: new Date('2023-09-08T23:11:00Z'),
+            source: 'USGS',
+            mag: 6.8,
+            lat: 31.1183,
+            lon: -8.4058,
+            deaths: '2,900+',
+            description: 'Powerful earthquake near Marrakech.'
+        }];
+
+        // ==========================================
+        // AI SUMMARY
         // ==========================================
         function generateAISummary() {
             const container = $('ai-summary-text');
@@ -2092,22 +2861,25 @@
                 return;
             }
             const counts = {};
-            newsArticles.forEach(a => { const c = a.category || 'World'; counts[c] = (counts[c] || 0) + 1; });
+            newsArticles.forEach(a => { const c = a.category || 'World';
+                counts[c] = (counts[c] || 0) + 1; });
             const top = Object.entries(counts).sort((x, y) => y[1] - x[1])[0];
             const critEq = crisisData.earthquakes.filter(e => severityFromMag(e.properties.mag || 0) === 'critical').length;
             const topHeadlines = newsArticles.slice(0, 3).map(a => '• ' + a.title).join('  ');
+            const crisesStr = REAL_CRISES.slice(0, 3).map(c => c.title).join(', ');
             container.textContent =
                 `🧠 BRIEF — ${newsArticles.length} stories analyzed. Dominant theme: ${top ? top[0] : '—'} (${top ? top[1] : 0} stories). ` +
-                `${critEq} critical seismic event(s) in the last 24h.  ${topHeadlines}`;
+                `${critEq} critical seismic event(s) in the last 24h. Major crises: ${crisesStr}. ${topHeadlines}`;
         }
 
         // ==========================================
-        // CRISIS SCORE CALCULATION
+        // CRISIS SCORE
         // ==========================================
         function calculateCrisisScore() {
             const events = crisisData.earthquakes.length + crisisData.disasters.length;
             const critical = crisisData.earthquakes.filter(e => severityFromMag(e.properties.mag || 0) === 'critical').length;
-            const score = Math.min(100, (events * 5) + (critical * 15) + (Math.random() * 10));
+            const score = Math.min(100, (events * 5) + (critical * 15) + (REAL_CRISES.filter(c => c.severity === 'critical')
+                .length * 10) + (Math.random() * 5));
             crisisScore = Math.round(score);
             const el = $('stat-score');
             if (el) el.textContent = crisisScore;
@@ -2144,15 +2916,18 @@
 
             const existingCanvas = container.querySelector('canvas');
             if (existingCanvas) existingCanvas.remove();
+            const oldTip = container.querySelector('.globe-pin-tooltip');
+            if (oldTip) oldTip.remove();
 
             const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+            const camera = new THREE.PerspectiveCamera(45, Math.max(container.clientWidth, 1) / Math.max(container
+                .clientHeight, 1), 0.1, 1000);
             const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(container.clientWidth, container.clientHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+            renderer.outputEncoding = THREE.sRGBEncoding;
             container.appendChild(renderer.domElement);
 
-            // Stars
             const starsGeo = new THREE.BufferGeometry();
             const starsCount = 2000;
             const starsPos = new Float32Array(starsCount * 3);
@@ -2160,12 +2935,10 @@
             starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
             const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.6,
                 blending: THREE.AdditiveBlending });
-            const stars = new THREE.Points(starsGeo, starsMat);
-            scene.add(stars);
+            scene.add(new THREE.Points(starsGeo, starsMat));
 
             const earthGroup = new THREE.Group();
             scene.add(earthGroup);
-
             const earthGeo = new THREE.SphereGeometry(1, 64, 64);
             const textureUrl = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
             const earthMat = new THREE.MeshPhongMaterial({
@@ -2178,30 +2951,19 @@
             earthGroup.add(earth);
 
             const glowGeo2 = new THREE.SphereGeometry(1.02, 64, 64);
-            const glowMat2 = new THREE.MeshPhongMaterial({
-                color: 0x4f46e5,
-                transparent: true,
-                opacity: 0.15,
-                side: THREE.BackSide,
-                blending: THREE.AdditiveBlending
-            });
+            const glowMat2 = new THREE.MeshPhongMaterial({ color: 0x4f46e5, transparent: true, opacity: 0.15,
+                side: THREE.BackSide, blending: THREE.AdditiveBlending });
             const glowMesh = new THREE.Mesh(glowGeo2, glowMat2);
             earthGroup.add(glowMesh);
 
             const ringGeo = new THREE.RingGeometry(1.08, 1.2, 64);
-            const ringMat = new THREE.MeshBasicMaterial({
-                color: 0x818cf8,
-                transparent: true,
-                opacity: 0.08,
-                side: THREE.DoubleSide,
-                depthWrite: false
-            });
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.08,
+                side: THREE.DoubleSide, depthWrite: false });
             const ring = new THREE.Mesh(ringGeo, ringMat);
             ring.rotation.x = Math.PI / 2;
             earthGroup.add(ring);
 
-            const ambientLight = new THREE.AmbientLight(0x404060);
-            scene.add(ambientLight);
+            scene.add(new THREE.AmbientLight(0x404060));
             const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
             dirLight.position.set(5, 3, 5);
             scene.add(dirLight);
@@ -2212,14 +2974,155 @@
             const defaultPos = options.position || { lat: 20, lon: 0, distance: 2.8 };
             const phi = (90 - defaultPos.lat) * Math.PI / 180;
             const theta = defaultPos.lon * Math.PI / 180;
-            camera.position.set(
-                defaultPos.distance * Math.sin(phi) * Math.cos(theta),
-                defaultPos.distance * Math.cos(phi),
-                defaultPos.distance * Math.sin(phi) * Math.sin(theta)
-            );
+            camera.position.set(defaultPos.distance * Math.sin(phi) * Math.cos(theta), defaultPos.distance * Math.cos(phi),
+                defaultPos.distance * Math.sin(phi) * Math.sin(theta));
             camera.lookAt(0, 0, 0);
 
-            const globeData = { scene, camera, renderer, earthGroup, earth, glowMesh, ring, container, markers: [] };
+            const tooltip = document.createElement('div');
+            tooltip.className = 'globe-pin-tooltip';
+            container.appendChild(tooltip);
+
+            const raycaster = new THREE.Raycaster();
+            const pointer = new THREE.Vector2(999, 999);
+            const globeData = {
+                scene,
+                camera,
+                renderer,
+                earthGroup,
+                earth,
+                glowMesh,
+                ring,
+                container,
+                markers: [],
+                markerMeshes: [],
+                hoveredMarker: null,
+                tooltip,
+                geocodeCache: new Map(),
+                geocodeBusy: new Set()
+            };
+
+            function latLonToVector(lat, lon, r = 1.02) {
+                const p = (90 - lat) * Math.PI / 180;
+                const t = lon * Math.PI / 180;
+                return new THREE.Vector3(r * Math.sin(p) * Math.cos(t), r * Math.cos(p), r * Math.sin(p) * Math.sin(t));
+            }
+
+            function escapeHtml(v) {
+                return String(v ?? '').replace(/[&<>'"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;',
+                    '"': '&quot;' }[c]));
+            }
+
+            async function resolveLocation(marker) {
+                const key = `${marker.lat.toFixed(4)},${marker.lon.toFixed(4)}`;
+                if (globeData.geocodeCache.has(key)) return globeData.geocodeCache.get(key);
+                if (globeData.geocodeBusy.has(key)) return null;
+                globeData.geocodeBusy.add(key);
+                try {
+                    const res = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(marker.lat)}&lon=${encodeURIComponent(marker.lon)}&format=json&zoom=10&addressdetails=1`, { headers: { 'Accept': 'application/json' } }
+                    );
+                    if (!res.ok) throw new Error('reverse geocode failed');
+                    const data = await res.json();
+                    const a = data.address || {};
+                    const location = {
+                        country: a.country || 'Unknown country',
+                        state: a.state || a.region || a.province || 'State/region unavailable',
+                        county: a.county || '',
+                        city: a.city || a.town || a.village || a.municipality || '',
+                        display: data.display_name || ''
+                    };
+                    globeData.geocodeCache.set(key, location);
+                    if (globeData.hoveredMarker === marker) updateTooltip(marker, location);
+                    return location;
+                } catch (err) {
+                    const fallback = { country: marker.country || 'Unknown country', state: marker.state ||
+                            'State/region unavailable', county: '', city: '', display: '' };
+                    globeData.geocodeCache.set(key, fallback);
+                    if (globeData.hoveredMarker === marker) updateTooltip(marker, fallback);
+                    return fallback;
+                } finally { globeData.geocodeBusy.delete(key); }
+            }
+
+            function updateTooltip(marker, location) {
+                const sev = marker.severity || 'medium';
+                const icon = marker.type === 'Conflict' ? '⚔' : marker.type === 'Earthquake' ? '◈' : '◆';
+                const loc = location || { country: 'Resolving country…', state: 'Resolving state/region…' };
+                tooltip.innerHTML = `
+                        <div class="gpt-title">${icon} ${escapeHtml(marker.type || 'CRISIS')} PIN</div>
+                        <div class="gpt-place">${escapeHtml(marker.title || marker.place || 'Crisis event')}</div>
+                        <div class="gpt-location">🌐 <b>${escapeHtml(loc.country)}</b>${loc.state ? ` · ${escapeHtml(loc.state)}` : ''}${loc.city ? ` · ${escapeHtml(loc.city)}` : ''}</div>
+                        <div class="gpt-meta"><span style="color:${marker.color}">● ${escapeHtml(sev.toUpperCase())}</span>${marker.mag != null ? `<span>M${Number(marker.mag).toFixed(1)}</span>` : ''}<span>${marker.lat.toFixed(2)}°, ${marker.lon.toFixed(2)}°</span></div>`;
+            }
+
+            function hideTooltip() {
+                globeData.hoveredMarker = null;
+                tooltip.classList.remove('show');
+            }
+
+            function positionTooltip(marker) {
+                const world = marker.group.position.clone();
+                marker.group.parent.localToWorld(world);
+                const projected = world.clone().project(camera);
+                const x = (projected.x * 0.5 + 0.5) * container.clientWidth;
+                const y = (-projected.y * 0.5 + 0.5) * container.clientHeight;
+                tooltip.style.left = `${x}px`;
+                tooltip.style.top = `${y}px`;
+            }
+
+            function hoverFromPointer() {
+                raycaster.setFromCamera(pointer, camera);
+                const hits = raycaster.intersectObjects(globeData.markerMeshes, true);
+                let found = null;
+                for (const hit of hits) {
+                    let obj = hit.object;
+                    while (obj && !obj.userData?.crisisMarker) obj = obj.parent;
+                    if (obj?.userData?.crisisMarker) { found = obj.userData.crisisMarker; break; }
+                }
+                if (!found) { if (globeData.hoveredMarker) hideTooltip(); return; }
+                if (globeData.hoveredMarker !== found) {
+                    if (globeData.hoveredMarker?.group) globeData.hoveredMarker.group.scale.setScalar(1);
+                    globeData.hoveredMarker = found;
+                    updateTooltip(found, globeData.geocodeCache.get(`${found.lat.toFixed(4)},${found.lon.toFixed(4)}`) ||
+                    null);
+                    tooltip.classList.add('show');
+                    resolveLocation(found);
+                }
+                positionTooltip(found);
+            }
+
+            function onPointerMove(e) {
+                const rect = renderer.domElement.getBoundingClientRect();
+                pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                hoverFromPointer();
+            }
+
+            function onPointerLeave() { pointer.set(999, 999);
+                hideTooltip(); }
+
+            function onPointerDown(e) {
+                const rect = renderer.domElement.getBoundingClientRect();
+                pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+                raycaster.setFromCamera(pointer, camera);
+                const hits = raycaster.intersectObjects(globeData.markerMeshes, true);
+                for (const hit of hits) {
+                    let obj = hit.object;
+                    while (obj && !obj.userData?.crisisMarker) obj = obj.parent;
+                    if (obj?.userData?.crisisMarker) {
+                        const m = obj.userData.crisisMarker;
+                        showToast(`📍 ${m.country || 'Crisis point'}`,
+                            `${m.title || m.type} • ${m.state || 'Location resolving'} • ${m.lat.toFixed(2)}, ${m.lon.toFixed(2)}`,
+                            m.severity || 'medium');
+                        resolveLocation(m);
+                        break;
+                    }
+                }
+            }
+            renderer.domElement.addEventListener('pointermove', onPointerMove);
+            renderer.domElement.addEventListener('pointerleave', onPointerLeave);
+            renderer.domElement.addEventListener('pointerdown', onPointerDown);
+            globeData._pointerHandlers = { onPointerMove, onPointerLeave, onPointerDown };
 
             function resize() {
                 const w = container.clientWidth,
@@ -2238,16 +3141,16 @@
             function animate(time) {
                 if (!globeData._active) return;
                 requestAnimationFrame(animate);
-                const delta = time - lastTime;
                 lastTime = time;
                 earthGroup.rotation.y += rotationSpeed;
                 ring.rotation.z = Math.sin(time * 0.0005) * 0.02;
                 globeData.markers.forEach((marker, idx) => {
-                    if (marker.material) {
-                        const pulse = 0.6 + 0.4 * Math.sin(time * 0.003 + idx);
-                        marker.material.opacity = pulse;
-                        marker.scale.setScalar(0.8 + 0.4 * pulse);
-                    }
+                    const pulse = 0.65 + 0.35 * Math.sin(time * 0.003 + idx * 0.7);
+                    if (marker.ringMat) marker.ringMat.opacity = 0.18 + pulse * 0.55;
+                    if (marker.dotMat) marker.dotMat.opacity = 0.72 + pulse * 0.28;
+                    if (marker.pulseRing) marker.pulseRing.scale.setScalar(0.75 + pulse * 0.8);
+                    if (globeData.hoveredMarker === marker) { marker.group.scale.setScalar(1.35);
+                        positionTooltip(marker); } else { marker.group.scale.setScalar(0.92 + pulse * 0.08); }
                 });
                 renderer.render(scene, camera);
             }
@@ -2256,42 +3159,69 @@
 
             globeData.addMarkers = function(points) {
                 points.forEach(p => {
-                    const lat = p.lat,
-                        lon = p.lon,
-                        color = p.color || '#ff4444',
-                        size = p.size || 0.04;
-                    const phi = (90 - lat) * Math.PI / 180;
-                    const theta = lon * Math.PI / 180;
-                    const r = 1.02;
-                    const x = r * Math.sin(phi) * Math.cos(theta);
-                    const y = r * Math.cos(phi);
-                    const z = r * Math.sin(phi) * Math.sin(theta);
-
+                    if (p.lat == null || p.lon == null) return;
+                    const color = p.color || '#ff4444';
+                    const size = Math.max(p.size || 0.04, 0.055);
+                    const surface = latLonToVector(p.lat, p.lon, 1.02);
+                    const normal = surface.clone().normalize();
                     const markerGroup = new THREE.Group();
-                    const dotGeo = new THREE.SphereGeometry(size, 8, 8);
-                    const dotMat = new THREE.MeshBasicMaterial({ color });
+                    markerGroup.position.copy(surface);
+                    markerGroup.userData.crisisMarker = p;
+
+                    const dotGeo = new THREE.SphereGeometry(size, 16, 16);
+                    const dotMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1, depthWrite: false,
+                        depthTest: true });
                     const dot = new THREE.Mesh(dotGeo, dotMat);
+                    dot.userData.crisisMarker = p;
                     markerGroup.add(dot);
 
-                    const ringGeo2 = new THREE.RingGeometry(size * 1.5, size * 2.5, 16);
-                    const ringMat2 = new THREE.MeshBasicMaterial({
-                        color,
-                        transparent: true,
-                        opacity: 0.5,
-                        side: THREE.DoubleSide,
-                        depthWrite: false
-                    });
+                    const ringGeo2 = new THREE.RingGeometry(size * 1.6, size * 2.4, 24);
+                    const ringMat2 = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .55,
+                        side: THREE.DoubleSide, depthWrite: false });
                     const ring2 = new THREE.Mesh(ringGeo2, ringMat2);
                     ring2.lookAt(0, 0, 0);
+                    ring2.userData.crisisMarker = p;
                     markerGroup.add(ring2);
 
-                    markerGroup.material = ringMat2;
+                    const pulseGeo = new THREE.RingGeometry(size * 3, size * 3.35, 24);
+                    const pulseMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .35,
+                        side: THREE.DoubleSide, depthWrite: false });
+                    const pulseRing = new THREE.Mesh(pulseGeo, pulseMat);
+                    pulseRing.lookAt(0, 0, 0);
+                    pulseRing.userData.crisisMarker = p;
+                    markerGroup.add(pulseRing);
+
+                    const stemGeo = new THREE.CylinderGeometry(Math.max(size * .13, .004), Math.max(size * .22, .007),
+                        .115, 10, 1, true);
+                    const stemMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .72,
+                        depthWrite: false });
+                    const stem = new THREE.Mesh(stemGeo, stemMat);
+                    stem.position.copy(normal.clone().multiplyScalar(.055));
+                    stem.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+                    stem.userData.crisisMarker = p;
+                    markerGroup.add(stem);
+
+                    markerGroup.ringMat = ringMat2;
+                    markerGroup.dotMat = dotMat;
+                    markerGroup.pulseRing = pulseRing;
                     markerGroup.scale.setScalar(1);
-                    markerGroup.position.set(x, y, z);
+                    markerGroup.userData.baseScale = 1;
+                    markerGroup.userData.markerSize = size;
                     globeData.earthGroup.add(markerGroup);
-                    globeData.markers.push(markerGroup);
+                    const record = Object.assign(p, { group: markerGroup, ringMat: ringMat2, dotMat });
+                    globeData.markers.push(record);
+                    globeData.markerMeshes.push(dot, ring2, pulseRing, stem, markerGroup);
                 });
             };
+
+            globeData.clearMarkers = function() {
+                globeData.markers.forEach(m => { if (m.group) globeData.earthGroup.remove(m.group); });
+                globeData.markers = [];
+                globeData.markerMeshes = [];
+                globeData.hoveredMarker = null;
+                tooltip.classList.remove('show');
+            };
+
             return globeData;
         }
 
@@ -2300,10 +3230,10 @@
         // ==========================================
         function initCinematicGlobe() {
             cinematicScene = createThreeGlobe('three-cinematic', {
-                position: { lat: -25, lon: 10, distance: 2.8 },
+                position: { lat: -25, lon: 10, distance: 2.9 },
                 rotationSpeed: 0.0015
             });
-            if (cinematicScene && crisisData.earthquakes.length) {
+            if (cinematicScene) {
                 setTimeout(() => addMarkersToGlobe(cinematicScene), 500);
             }
         }
@@ -2312,119 +3242,220 @@
             if (fullScene) {
                 fullScene._active = false;
                 if (fullScene._resizeHandler) window.removeEventListener('resize', fullScene._resizeHandler);
+                if (fullScene._pointerHandlers) {
+                    const c = fullScene.renderer?.domElement;
+                    if (c) { c.removeEventListener('pointermove', fullScene._pointerHandlers.onPointerMove);
+                        c.removeEventListener('pointerleave', fullScene._pointerHandlers.onPointerLeave);
+                        c.removeEventListener('pointerdown', fullScene._pointerHandlers.onPointerDown); }
+                }
                 const container = document.getElementById('three-full');
                 if (container) { const c = container.querySelector('canvas'); if (c) c.remove(); }
                 fullScene = null;
             }
             fullScene = createThreeGlobe('three-full', {
-                position: { lat: 20, lon: 0, distance: 2.5 },
+                position: { lat: 18, lon: 0, distance: 2.65 },
                 rotationSpeed: 0.001
             });
-            if (fullScene && crisisData.earthquakes.length) addMarkersToGlobe(fullScene);
+            if (fullScene) addMarkersToGlobe(fullScene);
         }
 
         function addMarkersToGlobe(globe) {
+            if (!globe) return;
             const points = [];
-            crisisData.earthquakes.slice(0, 30).forEach(eq => {
-                const coords = eq.geometry.coordinates;
+
+            // USGS earthquakes
+            crisisData.earthquakes.slice(0, 35).forEach(eq => {
+                const coords = eq.geometry?.coordinates;
                 if (!coords || coords.length < 2) return;
-                const lon = coords[0],
-                    lat = coords[1],
-                    mag = eq.properties.mag || 0;
+                const lon = Number(coords[0]),
+                    lat = Number(coords[1]),
+                    mag = Number(eq.properties?.mag || 0);
                 const sev = severityFromMag(mag);
-                let color = '#4ade80',
-                    size = 0.04;
-                if (sev === 'critical') { color = '#ef4444';
-                    size = 0.07; } else if (sev === 'high') { color = '#fb923c';
-                    size = 0.06; } else if (sev === 'medium') { color = '#fbbf24';
-                    size = 0.05; }
-                points.push({ lat, lon, color, size });
+                points.push({
+                    lat,
+                    lon,
+                    color: getSeverityColor(sev),
+                    size: sev === 'critical' ? .07 : sev === 'high' ? .06 : sev === 'medium' ? .05 : .04,
+                    severity: sev,
+                    type: 'Earthquake',
+                    title: eq.properties?.place || 'Earthquake',
+                    place: eq.properties?.place || 'Earthquake',
+                    mag,
+                    depth: coords[2] != null ? Number(coords[2]) : null,
+                    source: 'USGS'
+                });
             });
-            // GDELT conflict zones (purple)
-            gdeltConflicts.forEach(f => {
-                const c = f.geometry.coordinates;
+
+            // GDELT conflicts
+            gdeltConflicts.slice(0, 40).forEach(f => {
+                const c = f.geometry?.coordinates;
                 if (!c || c.length < 2) return;
-                points.push({ lat: c[1], lon: c[0], color: '#a855f7', size: 0.035 });
+                points.push({
+                    lat: Number(c[1]),
+                    lon: Number(c[0]),
+                    color: '#a855f7',
+                    size: .035,
+                    severity: 'high',
+                    type: 'Conflict',
+                    title: f.properties?.name || 'Conflict zone',
+                    place: 'Conflict zone',
+                    source: 'GDELT'
+                });
             });
+
+            // Real crises
+            REAL_CRISES.forEach(c => {
+                if (c.lat != null && c.lon != null) {
+                    const sev = c.severity || 'high';
+                    points.push({
+                        lat: c.lat,
+                        lon: c.lon,
+                        color: getSeverityColor(sev),
+                        size: sev === 'critical' ? .075 : .055,
+                        severity: sev,
+                        type: c.type || 'Crisis',
+                        title: c.title,
+                        place: c.region,
+                        mag: c.mag,
+                        source: c.source
+                    });
+                }
+            });
+
             globe.addMarkers(points);
+        }
+
+        const crisisGeoCache = new Map();
+
+        async function reverseCrisisLocation(lat, lon) {
+            const key = `${Number(lat).toFixed(4)},${Number(lon).toFixed(4)}`;
+            if (crisisGeoCache.has(key)) return crisisGeoCache.get(key);
+            try {
+                const res = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&format=json&zoom=10&addressdetails=1`
+                );
+                if (!res.ok) throw new Error('geocode failed');
+                const data = await res.json();
+                const a = data.address || {};
+                const out = {
+                    country: a.country || 'Unknown country',
+                    state: a.state || a.region || a.province || 'State/region unavailable',
+                    city: a.city || a.town || a.village || a.municipality || ''
+                };
+                crisisGeoCache.set(key, out);
+                return out;
+            } catch (e) {
+                const out = { country: 'Unknown country', state: 'State/region unavailable', city: '' };
+                crisisGeoCache.set(key, out);
+                return out;
+            }
+        }
+
+        function crisisLeafletIcon(color, symbol = '◆') {
+            return L.divIcon({ className: '', html: `<div class="leaflet-crisis-pin" style="--pin-color:${color}">${symbol}</div>`,
+                iconSize: [24, 24], iconAnchor: [12, 12], popupAnchor: [0, -15] });
         }
 
         function initLeafletMap() {
             if (leafletMap) { leafletMap.remove();
                 leafletMap = null; }
             const container = document.getElementById('leaflet-map');
-            if (!container) return;
-
-            leafletMap = L.map(container, {
-                center: [20, 0],
-                zoom: 2,
-                zoomControl: true,
-                attributionControl: true,
-                fadeAnimation: true,
-                zoomAnimation: true
-            });
-
-            // Base layer (light style for dark theme compatibility)
+            if (!container || typeof L === 'undefined') return;
+            container.innerHTML = '';
+            leafletMap = L.map(container, { center: [20, 0], zoom: 2, minZoom: 2, worldCopyJump: true, zoomControl: true,
+                attributionControl: true, fadeAnimation: true, zoomAnimation: true });
             L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>, &copy; CartoDB',
-                subdomains: 'abcd',
-                maxZoom: 19
+                subdomains: 'abcd', maxZoom: 19
             }).addTo(leafletMap);
 
-            // Event markers
-            crisisData.earthquakes.slice(0, 30).forEach(eq => {
-                const coords = eq.geometry.coordinates;
-                if (!coords || coords.length < 2) return;
-                const lon = coords[0],
-                    lat = coords[1],
-                    mag = eq.properties.mag || 0;
-                const sev = severityFromMag(mag);
-                const color = getSeverityColor(sev);
-                const circle = L.circleMarker([lat, lon], {
-                    radius: Math.max(mag * 2, 6),
-                    fillColor: color,
-                    color: '#fff',
-                    weight: 1,
-                    opacity: 1,
-                    fillOpacity: 0.8
-                }).bindPopup(`
-                        <b>${eq.properties.place || 'Unknown'}</b><br>
-                        Magnitude: ${mag}<br>
-                        Severity: ${sev.toUpperCase()}
-                    `).addTo(leafletMap);
+            const markerLayer = L.layerGroup().addTo(leafletMap);
+            const pulseLayer = L.layerGroup().addTo(leafletMap);
+            window.gcmsLeafletMarkerLayer = markerLayer;
 
-                // Drill-down: click to show country
-                circle.on('click', async function(e) {
-                    try {
-                        const res = await fetch(
-                            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
-                        const data = await res.json();
-                        const country = data.address?.country || 'Unknown';
-                        showToast(`📍 ${country}`, `${eq.properties.place} | M${mag}`, sev);
-                    } catch (err) {
-                        showToast(`📍 ${eq.properties.place}`, `M${mag}`, sev);
-                    }
+            const addEarthquake = (eq) => {
+                const coords = eq.geometry?.coordinates;
+                if (!coords || coords.length < 2) return;
+                const lon = Number(coords[0]),
+                    lat = Number(coords[1]),
+                    mag = Number(eq.properties?.mag || 0);
+                const sev = severityFromMag(mag),
+                    color = getSeverityColor(sev);
+                const marker = L.marker([lat, lon], { icon: crisisLeafletIcon(color, '◈'), keyboard: true,
+                    riseOnHover: true, title: eq.properties?.place || 'Earthquake' }).addTo(markerLayer);
+                const pulse = L.circle([lat, lon], { radius: Math.max(mag * 9000, 18000), color, weight: 1, opacity: .22,
+                    fillColor: color, fillOpacity: .035, interactive: false }).addTo(pulseLayer);
+                marker.bindPopup(
+                    `<div style="font-family:Inter,sans-serif;min-width:210px"><b>${esc(eq.properties?.place||'Unknown')}</b><br><span style="color:${color}">● ${sev.toUpperCase()}</span> · Magnitude M${mag.toFixed(1)}<br><small>Loading country / state…</small></div>`
+                    );
+                marker.on('mouseover', async () => {
+                    const loc = await reverseCrisisLocation(lat, lon);
+                    marker.bindTooltip(
+                        `<b>${esc(loc.country)}</b>${loc.state?` · ${esc(loc.state)}`:''}${loc.city?` · ${esc(loc.city)}`:''}<br><span style="color:${color}">${esc(eq.properties?.place||'Crisis point')}</span>`, { sticky: true, direction: 'top', opacity: .96 }
+                    ).openTooltip();
+                });
+                marker.on('click', async () => {
+                    const loc = await reverseCrisisLocation(lat, lon);
+                    marker.setPopupContent(
+                        `<div style="font-family:Inter,sans-serif;min-width:220px"><b>${esc(eq.properties?.place||'Unknown')}</b><br><span style="color:${color}">● ${sev.toUpperCase()}</span> · M${mag.toFixed(1)}<br>🌐 <b>${esc(loc.country)}</b>${loc.state?` · ${esc(loc.state)}`:''}${loc.city?` · ${esc(loc.city)}`:''}<br><small>USGS · ${lat.toFixed(3)}, ${lon.toFixed(3)}</small></div>`
+                    ).openPopup();
+                });
+            };
+            crisisData.earthquakes.slice(0, 35).forEach(addEarthquake);
+
+            // Real crises on leaflet
+            REAL_CRISES.forEach(c => {
+                if (c.lat == null || c.lon == null) return;
+                const color = getSeverityColor(c.severity);
+                const symbol = c.type === 'Conflict' ? '⚔' : c.type === 'Earthquake' ? '◈' : '◆';
+                const marker = L.marker([c.lat, c.lon], { icon: crisisLeafletIcon(color, symbol), riseOnHover: true,
+                    title: c.title }).addTo(markerLayer);
+                marker.bindPopup(
+                    `<div style="font-family:Inter,sans-serif;min-width:220px"><b>${esc(c.title)}</b><br><span style="color:${color}">● ${c.severity.toUpperCase()}</span> · ${c.type}<br>🌐 ${esc(c.region)}<br><small>${c.deaths} estimated casualties · ${c.source}</small></div>`
+                    );
+                marker.on('mouseover', async () => {
+                    const loc = await reverseCrisisLocation(c.lat, c.lon);
+                    marker.bindTooltip(
+                        `<b>${esc(loc.country)}</b>${loc.state?` · ${esc(loc.state)}`:''}<br><span style="color:${color}">${esc(c.title)}</span>`, { sticky: true, direction: 'top', opacity: .96 }
+                    ).openTooltip();
                 });
             });
 
-            // GDELT conflict markers (purple)
-            gdeltConflicts.forEach(f => {
-                const c = f.geometry.coordinates;
-                L.circleMarker([c[1], c[0]], {
-                    radius: 5, fillColor: '#a855f7', color: '#e9d5ff', weight: 1, fillOpacity: 0.85
-                }).bindPopup(`<b>${esc(f.properties?.name || 'Conflict zone')}</b><br>Source: GDELT`).addTo(leafletMap);
+            gdeltConflicts.slice(0, 40).forEach(f => {
+                const c = f.geometry?.coordinates;
+                if (!c || c.length < 2) return;
+                const lon = Number(c[0]),
+                    lat = Number(c[1]),
+                    color = '#a855f7';
+                const marker = L.marker([lat, lon], { icon: crisisLeafletIcon(color, '⚔'), riseOnHover: true,
+                    title: f.properties?.name || 'Conflict zone' }).addTo(markerLayer);
+                marker.bindPopup(
+                    `<b>${esc(f.properties?.name||'Conflict zone')}</b><br><span style="color:#a855f7">● CONFLICT</span><br><small>Source: GDELT</small>`
+                    );
+                marker.on('mouseover', async () => {
+                    const loc = await reverseCrisisLocation(lat, lon);
+                    marker.bindTooltip(
+                        `<b>${esc(loc.country)}</b>${loc.state?` · ${esc(loc.state)}`:''}<br><span style="color:#a855f7">Conflict zone</span>`, { sticky: true, direction: 'top', opacity: .96 }
+                    ).openTooltip();
+                });
             });
 
-            // Heatmap layer
             const heatPoints = crisisData.earthquakes.slice(0, 50).map(eq => {
-                const coords = eq.geometry.coordinates;
-                if (!coords || coords.length < 2) return null;
-                return [coords[1], coords[0], Math.min(eq.properties.mag || 1, 10)];
-            }).filter(p => p);
+                const c = eq.geometry?.coordinates;
+                return c && c.length >= 2 ? [Number(c[1]), Number(c[0]), Math.min(Number(eq.properties?.mag || 1) / 10,
+                    1)] : null;
+            }).filter(Boolean);
             if (heatPoints.length && typeof L.heatLayer === 'function') {
-                heatLayer = L.heatLayer(heatPoints, { radius: 25, blur: 15, maxZoom: 10 });
-                heatLayer.addTo(leafletMap);
+                heatLayer = L.heatLayer(heatPoints, { radius: 28, blur: 20, maxZoom: 10, minOpacity: .18 }).addTo(
+                leafletMap);
             }
+
+            const legend = document.createElement('div');
+            legend.className = 'map-marker-legend';
+            legend.innerHTML =
+                `<span><i style="color:#ef4444;background:#ef4444"></i>Critical</span><span><i style="color:#fb923c;background:#fb923c"></i>High</span><span><i style="color:#fbbf24;background:#fbbf24"></i>Medium</span><span><i style="color:#a855f7;background:#a855f7"></i>Conflict</span>`;
+            container.appendChild(legend);
+            setTimeout(() => leafletMap.invalidateSize(), 120);
         }
 
         // ==========================================
@@ -2433,6 +3464,7 @@
         function renderDashboard() {
             const events = [];
 
+            // USGS earthquakes
             crisisData.earthquakes.slice(0, 8).forEach(eq => {
                 const coords = eq.geometry.coordinates || [];
                 events.push({
@@ -2450,6 +3482,7 @@
                 });
             });
 
+            // ReliefWeb disasters
             crisisData.disasters.slice(0, 4).forEach(d => {
                 const f = d.fields || {};
                 events.push({
@@ -2460,6 +3493,23 @@
                     time: f.date?.created ? new Date(f.date.created) : Date.now(),
                     source: 'ReliefWeb',
                     url: f.url || null
+                });
+            });
+
+            // Real crises
+            REAL_CRISES.forEach(c => {
+                events.push({
+                    title: c.title,
+                    type: c.type || 'Crisis',
+                    severity: c.severity || 'high',
+                    region: c.region,
+                    time: c.time || Date.now(),
+                    source: c.source || 'Global',
+                    mag: c.mag,
+                    lat: c.lat,
+                    lon: c.lon,
+                    deaths: c.deaths,
+                    description: c.description
                 });
             });
 
@@ -2475,15 +3525,16 @@
             $('stat-active').textContent = activeCount;
             $('stat-alerts').textContent = alertCount;
             if ($('story-events')) $('story-events').textContent = activeCount;
-            if ($('story-critical')) $('story-critical').textContent = filtered.filter(e => e.severity === 'critical').length;
+            if ($('story-critical')) $('story-critical').textContent = filtered.filter(e => e.severity === 'critical')
+            .length;
             if ($('story-high')) $('story-high').textContent = filtered.filter(e => e.severity === 'high').length;
 
             calculateCrisisScore();
 
             window.currentEvents = events;
             const eventList = $('event-list');
-            eventList.innerHTML = filtered.slice(0, 6).map(e => `
-                    <div class="event-item ${e.severity}" onclick="showEventDetail(${events.indexOf(e)})">
+            eventList.innerHTML = filtered.slice(0, 8).map((e, idx) => `
+                    <div class="event-item ${e.severity}" onclick="showEventDetail(${idx})">
                         <div class="event-header">
                             <div class="event-title">${e.title}</div>
                             <span class="event-severity severity-badge-${e.severity}">${e.severity}</span>
@@ -2492,13 +3543,14 @@
                             <span>${e.type}</span><span class="dot">•</span>
                             <span>${e.region}</span><span class="dot">•</span>
                             <span>${timeAgo(e.time)}</span>
+                            ${e.deaths ? `<span class="dot">•</span><span style="color:var(--critical);">${e.deaths}</span>` : ''}
                         </div>
                     </div>
                 `).join('');
 
             const alerts = filtered.filter(e => e.severity === 'critical' || e.severity === 'high');
-            $('alert-list').innerHTML = alerts.slice(0, 5).map(e => `
-                    <div class="event-item ${e.severity}" onclick="showEventDetail(${alerts.indexOf(e)})">
+            $('alert-list').innerHTML = alerts.slice(0, 6).map((e, idx) => `
+                    <div class="event-item ${e.severity}" onclick="showEventDetail(${events.indexOf(e)})">
                         <div class="event-header">
                             <div class="event-title">${e.title}</div>
                             <span class="event-severity severity-badge-${e.severity}">${e.severity}</span>
@@ -2560,12 +3612,14 @@
                 ).join('');
             }
             if (newsArticles.length === 0) {
-                feed.innerHTML = `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading world news…</div></div>`;
+                feed.innerHTML =
+                    `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading world news…</div></div>`;
                 return;
             }
             const items = getFilteredNews().slice(0, 10);
             if (!items.length) {
-                feed.innerHTML = `<div class="news-item"><div class="news-source">Filter</div><div class="news-title">No stories match your filter</div></div>`;
+                feed.innerHTML =
+                    `<div class="news-item"><div class="news-source">Filter</div><div class="news-title">No stories match your filter</div></div>`;
                 return;
             }
             feed.innerHTML = items.map(({ a, i }) => `
@@ -2584,7 +3638,8 @@
             const feed = $('story-news-feed');
             if (!feed) return;
             if (newsArticles.length === 0) {
-                feed.innerHTML = `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading…</div></div>`;
+                feed.innerHTML =
+                    `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading…</div></div>`;
                 return;
             }
             feed.innerHTML = newsArticles.slice(0, 4).map((n, i) => `
@@ -2603,13 +3658,13 @@
         function showNewsDetail(i) {
             const a = newsArticles[i];
             if (!a) return;
-            $('nd-image').innerHTML = a.image
-                ? `<img src="${a.image}" alt="" onerror="this.parentElement.style.display='none'">` : '';
+            $('nd-image').innerHTML = a.image ?
+                `<img src="${a.image}" alt="" onerror="this.parentElement.style.display='none'">` : '';
             $('nd-badges').innerHTML =
                 `<span class="cat-tag" style="font-size:.55rem;padding:.15rem .5rem;">${a.category || 'World'}</span>` +
-                (a.tone != null
-                    ? `<span class="tone-badge ${a.tone < -3 ? 'neg' : a.tone > 3 ? 'pos' : 'neu'}">Tone ${a.tone.toFixed(1)}</span>`
-                    : '') +
+                (a.tone != null ?
+                    `<span class="tone-badge ${a.tone < -3 ? 'neg' : a.tone > 3 ? 'pos' : 'neu'}">Tone ${a.tone.toFixed(1)}</span>` :
+                    '') +
                 (a.language ? `<span class="tone-badge neu">${String(a.language).toUpperCase()}</span>` : '');
             $('nd-title').textContent = a.title;
             $('nd-meta').textContent = `${a.source} • ${formatTime(a.time)} • ${timeAgo(a.time)}`;
@@ -2633,7 +3688,8 @@
                 if (!res.ok) throw new Error('fetch failed');
                 const html = await res.text();
                 const doc = new DOMParser().parseFromString(html, 'text/html');
-                doc.querySelectorAll('script,style,nav,header,footer,aside,form,iframe,svg,noscript').forEach(n => n.remove());
+                doc.querySelectorAll('script,style,nav,header,footer,aside,form,iframe,svg,noscript').forEach(n => n
+                .remove());
                 const ps = [...doc.querySelectorAll('p')]
                     .map(p => p.textContent.trim())
                     .filter(t => t.length > 80)
@@ -2643,8 +3699,8 @@
                     `<p class="nd-hint">— Excerpt truncated. Read the complete story at ${esc(a.source)}.</p>`;
             } catch (e) {
                 body.innerHTML = `
-                    <p class="nd-hint">⚠️ Couldn't auto-load the full text — the publisher likely blocks external readers.</p>
-                    <p><a class="btn btn-primary" href="${a.link}" target="_blank">Read on ${esc(a.source)} ↗</a></p>`;
+                        <p class="nd-hint">⚠️ Couldn't auto-load the full text — the publisher likely blocks external readers.</p>
+                        <p><a class="btn btn-primary" href="${a.link}" target="_blank">Read on ${esc(a.source)} ↗</a></p>`;
             }
             btn.textContent = '📄 Load full article';
             btn.disabled = false;
@@ -2661,17 +3717,23 @@
                 e.mag != null ? ['Magnitude', 'M' + Number(e.mag).toFixed(1)] : null,
                 e.depth != null ? ['Depth', e.depth + ' km'] : null,
                 ['Region', e.region],
+                e.deaths ? ['Casualties', e.deaths] : null,
                 ['Reported (UTC)', formatTime(e.time)],
                 ['Status', timeAgo(e.time)],
                 ['Source', e.source]
             ].filter(Boolean);
-            $('ed-body').innerHTML = rows.map(r => `<div class="ed-row"><b>${r[0]}</b><span>${esc(r[1])}</span></div>`).join('') +
-                (e.url ? `<a class="btn btn-primary" style="margin-top:.8rem;" href="${e.url}" target="_blank">Open ${esc(e.source)} report ↗</a>` : '');
+            $('ed-body').innerHTML = rows.map(r => `<div class="ed-row"><b>${r[0]}</b><span>${esc(r[1])}</span></div>`)
+                .join('') +
+                (e.url ? `<a class="btn btn-primary" style="margin-top:.8rem;" href="${e.url}" target="_blank">Open ${esc(e.source)} report ↗</a>` :
+                    '') +
+                (e.description ? `<div style="margin-top:.8rem;font-size:.7rem;color:var(--text-secondary);">${esc(e.description)}</div>` :
+                    '');
             $('ed-country').textContent = '';
             $('event-detail-modal').classList.add('active');
             if (e.lat != null && e.lon != null) {
                 try {
-                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${e.lat}&lon=${e.lon}&format=json`);
+                    const res = await fetch(
+                        `https://nominatim.openstreetmap.org/reverse?lat=${e.lat}&lon=${e.lon}&format=json`);
                     const data = await res.json();
                     const c = data.address?.country;
                     if (c) $('ed-country').textContent = `📍 ${c}`;
@@ -2699,28 +3761,37 @@
                         data: criticalData,
                         backgroundColor: 'rgba(239, 68, 68, 0.7)',
                         borderColor: '#ef4444',
-                        borderWidth: 1
+                        borderWidth: 1,
+                        borderRadius: 4
                     }, {
                         label: 'High',
                         data: highData,
                         backgroundColor: 'rgba(251, 146, 60, 0.7)',
                         borderColor: '#fb923c',
-                        borderWidth: 1
+                        borderWidth: 1,
+                        borderRadius: 4
                     }, {
                         label: 'Medium',
                         data: mediumData,
                         backgroundColor: 'rgba(251, 191, 36, 0.7)',
                         borderColor: '#fbbf24',
-                        borderWidth: 1
+                        borderWidth: 1,
+                        borderRadius: 4
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#94a3b8', font: { size: 10, family: 'Inter' } }
+                        }
+                    },
                     scales: {
-                        x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                        x: { ticks: { color: '#64748b', font: { size: 10, family: 'Inter' } },
+                            grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#64748b', font: { size: 10, family: 'Inter' } },
+                            grid: { color: 'rgba(255,255,255,0.05)' } }
                     }
                 }
             });
@@ -2734,7 +3805,7 @@
             const toast = document.createElement('div');
             toast.className = 'toast';
             const colors = { critical: 'var(--critical)', high: 'var(--high)', medium: 'var(--medium)',
-            low: 'var(--low)' };
+                low: 'var(--low)' };
             toast.style.borderLeftColor = colors[severity] || 'var(--critical)';
             const icons = { critical: '🚨', high: '⚠️', medium: '📢', low: 'ℹ️' };
             toast.innerHTML = `
@@ -2758,7 +3829,7 @@
         }
 
         // ==========================================
-        // AUDIO ALERTS (Sonification)
+        // AUDIO ALERTS
         // ==========================================
         function playAlertSound(severity) {
             try {
@@ -2804,7 +3875,7 @@
         function setupVoiceCommands() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) { showToast('Voice Unsupported', 'Your browser does not support voice commands.',
-                'low'); return; }
+                    'low'); return; }
             const recognition = new SpeechRecognition();
             recognition.lang = 'en-US';
             recognition.interimResults = false;
@@ -2836,21 +3907,49 @@
         }
 
         // ==========================================
-        // LANGUAGE TOGGLE
+        // LANGUAGE TOGGLE (with dropdown)
         // ==========================================
-        function toggleLanguage() {
-            lang = lang === 'en' ? 'es' : 'en';
-            $('lang-toggle').textContent = lang.toUpperCase();
-            const translations = {
-                en: { title: 'GCMS CORE X', live: 'LIVE', story: 'Story' },
-                es: { title: 'GCMS CORE X', live: 'EN VIVO', story: 'Historia' }
-            };
-            const t = translations[lang];
-            document.querySelector('.header-brand').innerHTML =
-                `<span class="brand-icon">◆</span> ${t.title} <span style="font-size:0.5rem;font-weight:400;color:var(--text-muted);margin-left:0.3rem;">v4.0</span>`;
-            document.querySelector('.live-badge').textContent = `● ${t.live}`;
-            $('story-toggle').textContent = `📖 ${t.story}`;
+        let langDropdownOpen = false;
+
+        function toggleLanguage(code) {
+            if (code) {
+                lang = code;
+                const langData = LANGUAGES.find(l => l.code === code);
+                $('lang-toggle').innerHTML = `🌐 ${code.toUpperCase()}`;
+                const t = translations[code] || translations.en;
+                document.querySelector('.header-brand').innerHTML =
+                    `<span class="brand-icon">◆</span> ${t.title} <span style="font-size:0.5rem;font-weight:400;color:var(--text-muted);margin-left:0.3rem;">v5.0</span>`;
+                document.querySelector('.live-badge').textContent = `● ${t.live}`;
+                $('story-toggle').textContent = `📖 ${t.story}`;
+                showToast(`🌐 Language changed`, `${langData ? langData.native : code} (${code})`, 'low');
+                // Close dropdown
+                document.getElementById('lang-dropdown-content').classList.remove('show');
+                langDropdownOpen = false;
+                // Re-render with new language
+                renderDashboard();
+                return;
+            }
+            // Toggle dropdown
+            const dropdown = document.getElementById('lang-dropdown-content');
+            langDropdownOpen = !langDropdownOpen;
+            dropdown.classList.toggle('show', langDropdownOpen);
+            if (langDropdownOpen) {
+                // Populate dropdown
+                dropdown.innerHTML = LANGUAGES.map(l =>
+                    `<button class="${l.code === lang ? 'active-lang' : ''}" onclick="toggleLanguage('${l.code}')">${l.native} (${l.code.toUpperCase()})</button>`
+                ).join('');
+            }
         }
+
+        // Close dropdown on outside click
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('lang-dropdown-content');
+            const toggle = document.getElementById('lang-toggle');
+            if (dropdown && !dropdown.contains(e.target) && !toggle.contains(e.target)) {
+                dropdown.classList.remove('show');
+                langDropdownOpen = false;
+            }
+        });
 
         // ==========================================
         // FULLSCREEN
@@ -2864,7 +3963,7 @@
         }
 
         // ==========================================
-        // MAP TOGGLE (3D / 2D)
+        // MAP TOGGLE
         // ==========================================
         function toggleMap() {
             isMap3D = !isMap3D;
@@ -2884,8 +3983,8 @@
                 btn.textContent = '🗺️ 2D';
                 btn.classList.add('btn-active');
                 if (!leafletMap) initLeafletMap();
-                else leafletMap.invalidateSize();
-                // Toggle heatmap overlay
+                else { leafletMap.invalidateSize();
+                    setTimeout(() => leafletMap.fitWorld({ animate: false }), 80); }
                 if (heatLayer) {
                     if (heatLayer._map) heatLayer.remove();
                     else heatLayer.addTo(leafletMap);
@@ -2925,6 +4024,8 @@
         // KEYBOARD SHORTCUTS
         // ==========================================
         document.addEventListener('keydown', (e) => {
+            const tag = (e.target && e.target.tagName || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea') return;
             if (e.key === 'm' || e.key === 'M') toggleMap();
             if (e.key === 's' || e.key === 'S') toggleStoryMode();
             if (e.key === 'f' || e.key === 'F') toggleFullscreen();
@@ -2968,6 +4069,175 @@
         }
 
         // ==========================================
+        // PARTICLE BACKGROUND (Fluid Morphing Effect)
+        // ==========================================
+        function initParticleBackground() {
+            const canvas = document.getElementById('particle-bg');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const W = canvas.parentElement.clientWidth || window.innerWidth;
+            const H = canvas.parentElement.clientHeight || window.innerHeight;
+            canvas.width = W;
+            canvas.height = H;
+
+            const particles = [];
+            const count = 120;
+
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: Math.random() * W,
+                    y: Math.random() * H,
+                    vx: (Math.random() - 0.5) * 0.4,
+                    vy: (Math.random() - 0.5) * 0.4,
+                    r: 1 + Math.random() * 2.5,
+                    alpha: 0.1 + Math.random() * 0.3,
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, W, H);
+                const time = Date.now() * 0.001;
+
+                // Draw connections
+                for (let i = 0; i < particles.length; i++) {
+                    for (let j = i + 1; j < particles.length; j++) {
+                        const dx = particles[i].x - particles[j].x;
+                        const dy = particles[i].y - particles[j].y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < 150) {
+                            const alpha = (1 - dist / 150) * 0.2;
+                            ctx.beginPath();
+                            ctx.moveTo(particles[i].x, particles[i].y);
+                            ctx.lineTo(particles[j].x, particles[j].y);
+                            ctx.strokeStyle = `rgba(129, 140, 248, ${alpha})`;
+                            ctx.lineWidth = 0.5;
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // Draw particles with morphing
+                particles.forEach((p, idx) => {
+                    p.x += p.vx + Math.sin(time * 0.5 + p.phase) * 0.15;
+                    p.y += p.vy + Math.cos(time * 0.4 + p.phase * 1.3) * 0.15;
+                    if (p.x < 0) p.x = W;
+                    if (p.x > W) p.x = 0;
+                    if (p.y < 0) p.y = H;
+                    if (p.y > H) p.y = 0;
+
+                    const pulse = 0.7 + 0.3 * Math.sin(time * 0.6 + idx * 0.5);
+                    const radius = p.r * pulse;
+                    const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius * 3);
+                    grad.addColorStop(0, `rgba(129, 140, 248, ${p.alpha * pulse * 0.6})`);
+                    grad.addColorStop(0.5, `rgba(129, 140, 248, ${p.alpha * pulse * 0.2})`);
+                    grad.addColorStop(1, `rgba(129, 140, 248, 0)`);
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, radius * 3, 0, Math.PI * 2);
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(129, 140, 248, ${p.alpha * pulse * 0.8})`;
+                    ctx.fill();
+                });
+
+                requestAnimationFrame(draw);
+            }
+            draw();
+
+            window.addEventListener('resize', () => {
+                const W2 = canvas.parentElement.clientWidth || window.innerWidth;
+                const H2 = canvas.parentElement.clientHeight || window.innerHeight;
+                canvas.width = W2;
+                canvas.height = H2;
+            });
+        }
+
+        // ==========================================
+        // LIVE EVENT MONITOR
+        // ==========================================
+        const seenEventKeys = new Set();
+
+        function eventKey(p) {
+            return `${p.type}:${(p.title||'').slice(0,60)}:${Number(p.lat).toFixed(2)},${Number(p.lon).toFixed(2)}`;
+        }
+
+        function refreshGlobeMarkers(newlyDetected) {
+            [fullScene, cinematicScene].forEach(g => {
+                if (!g) return;
+                g.clearMarkers();
+                addMarkersToGlobe(g);
+            });
+            if (leafletMap) initLeafletMap();
+
+            if (newlyDetected && newlyDetected.length) {
+                newlyDetected.slice(0, 3).forEach(p => {
+                    const icon = p.type === 'Conflict' ? '⚔' : '◈';
+                    showToast(`${icon} New pin: ${p.title || p.type}`,
+                        `${p.severity ? p.severity.toUpperCase() + ' • ' : ''}${p.lat.toFixed(2)}°, ${p.lon.toFixed(2)}°`,
+                        p.severity || 'medium');
+                });
+            }
+        }
+
+        async function pollLiveCrisisFeeds() {
+            try {
+                const [eqRes, gdeltRes] = await Promise.allSettled([
+                    fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson').then(r => r
+                        .json()),
+                    fetch('https://api.gdeltproject.org/api/v2/geo/geo?query=conflict&format=GeoJSON&timespan=1d').then(
+                        r => r.json())
+                ]);
+
+                let changed = false;
+                const newlyDetected = [];
+
+                if (eqRes.status === 'fulfilled' && Array.isArray(eqRes.value.features)) {
+                    crisisData.earthquakes = eqRes.value.features;
+                    changed = true;
+                }
+                if (gdeltRes.status === 'fulfilled' && Array.isArray(gdeltRes.value.features)) {
+                    gdeltConflicts = gdeltRes.value.features
+                        .filter(f => f.geometry && f.geometry.coordinates && f.geometry.coordinates.length >= 2)
+                        .slice(0, 40);
+                    changed = true;
+                }
+                if (!changed) return;
+
+                const points = [];
+                crisisData.earthquakes.slice(0, 35).forEach(eq => {
+                    const coords = eq.geometry?.coordinates;
+                    if (!coords || coords.length < 2) return;
+                    const lon = Number(coords[0]),
+                        lat = Number(coords[1]),
+                        mag = Number(eq.properties?.mag || 0);
+                    const sev = severityFromMag(mag);
+                    points.push({ lat, lon, severity: sev, type: 'Earthquake',
+                        title: eq.properties?.place || 'Earthquake' });
+                });
+                gdeltConflicts.slice(0, 40).forEach(f => {
+                    const c = f.geometry?.coordinates;
+                    if (!c || c.length < 2) return;
+                    points.push({ lat: Number(c[1]), lon: Number(c[0]), severity: 'high', type: 'Conflict',
+                        title: f.properties?.name || 'Conflict zone' });
+                });
+
+                points.forEach(p => {
+                    const k = eventKey(p);
+                    if (!seenEventKeys.has(k)) { seenEventKeys.add(k);
+                        newlyDetected.push(p); }
+                });
+
+                if (isExpanded) {
+                    renderDashboard();
+                    refreshGlobeMarkers(newlyDetected);
+                }
+            } catch (e) { console.warn('Live feed poll failed', e); }
+        }
+
+        // ==========================================
         // TRANSITIONS
         // ==========================================
         async function expandToDashboard() {
@@ -2987,6 +4257,26 @@
             setTimeout(() => {
                 initFullGlobe();
                 renderDashboard();
+                initParticleBackground();
+
+                // Seed seen set
+                [...crisisData.earthquakes.slice(0, 35).map(eq => {
+                    const coords = eq.geometry?.coordinates;
+                    if (!coords || coords.length < 2) return null;
+                    return { lat: Number(coords[1]), lon: Number(coords[0]), type: 'Earthquake',
+                        title: eq.properties?.place || 'Earthquake' };
+                }), ...gdeltConflicts.slice(0, 40).map(f => {
+                    const c = f.geometry?.coordinates;
+                    if (!c || c.length < 2) return null;
+                    return { lat: Number(c[1]), lon: Number(c[0]), type: 'Conflict',
+                        title: f.properties?.name || 'Conflict zone' };
+                })].filter(Boolean).forEach(p => seenEventKeys.add(eventKey(p)));
+
+                // Show a welcome toast with real crisis count
+                const totalCrises = REAL_CRISES.length + crisisData.earthquakes.length;
+                showToast('🌍 GCMS CORE X Active',
+                    `Monitoring ${totalCrises} crisis points across ${REAL_CRISES.length} major events.`, 'low');
+
                 if (crisisData.earthquakes.length) {
                     const latest = crisisData.earthquakes[0];
                     const mag = latest.properties.mag || 0;
@@ -3006,9 +4296,77 @@
             setInterval(() => {
                 $('clock').textContent = new Date().toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
             }, 1000);
+
+            setInterval(pollLiveCrisisFeeds, 120000);
         }
 
         // ==========================================
+
+        // =========================================================
+        // iPHONE-STYLE SCROLL MORPH ENGINE
+        // Smoothly morphs the dashboard chrome as the user scrolls.
+        // =========================================================
+        (function initIOSScrollMorphism() {
+            const dashboard = document.getElementById('dashboard');
+            if (!dashboard) return;
+
+            let ticking = false;
+            let lastY = window.scrollY || 0;
+            let lastTime = performance.now();
+            let velocity = 0;
+
+            const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+            const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+
+            function updateMorph() {
+                const y = window.scrollY || document.documentElement.scrollTop || 0;
+                const now = performance.now();
+                const dt = Math.max(8, now - lastTime);
+
+                // Velocity is intentionally damped so the UI feels physical,
+                // rather than reacting like a normal CSS hover animation.
+                const instantVelocity = (y - lastY) / dt;
+                velocity += (instantVelocity - velocity) * 0.18;
+
+                const progress = clamp(y / 90, 0, 1);
+                const p = easeOut(progress);
+                const velocityBoost = clamp(Math.abs(velocity) * 0.035, 0, 0.055);
+
+                dashboard.style.setProperty('--ios-morph-progress', p.toFixed(3));
+                dashboard.style.setProperty('--ios-morph-y', `${(-p * 1.5).toFixed(2)}px`);
+                dashboard.style.setProperty('--ios-morph-scale', (1 - p * 0.008).toFixed(4));
+
+                // Add a tiny elastic response while flicking/scrolling.
+                if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    const elastic = Math.min(2.2, velocityBoost * 40);
+                    dashboard.style.setProperty(
+                        '--ios-morph-y',
+                        `${(-p * 1.5 - elastic).toFixed(2)}px`
+                    );
+                }
+
+                dashboard.classList.toggle('scroll-morphed', y > 24);
+
+                lastY = y;
+                lastTime = now;
+                ticking = false;
+            }
+
+            function requestMorphUpdate() {
+                if (!ticking) {
+                    ticking = true;
+                    requestAnimationFrame(updateMorph);
+                }
+            }
+
+            window.addEventListener('scroll', requestMorphUpdate, { passive: true });
+            window.addEventListener('resize', requestMorphUpdate, { passive: true });
+
+            // Initialize immediately so refresh-at-scroll-position also works.
+            updateMorph();
+        })();
+
+
         // MAIN INIT
         // ==========================================
         async function init() {
@@ -3027,10 +4385,14 @@
             view.addEventListener('click', expandToDashboard);
             view.addEventListener('touchstart', expandToDashboard, { passive: true });
 
-            // Event listeners for controls
+            // Event listeners
             $('map-toggle').addEventListener('click', toggleMap);
             $('theme-toggle').addEventListener('click', toggleTheme);
-            $('lang-toggle').addEventListener('click', toggleLanguage);
+            // Language toggle now handled by toggleLanguage
+            $('lang-toggle').addEventListener('click', (e) => {
+                e.stopPropagation();
+                toggleLanguage();
+            });
             $('fullscreen-toggle').addEventListener('click', toggleFullscreen);
             $('pdf-export').addEventListener('click', exportPDF);
             $('voice-toggle').addEventListener('click', setupVoiceCommands);
@@ -3049,7 +4411,6 @@
                 generateAISummary();
             });
 
-            // Timeline slider
             const slider = $('timeline-slider');
             slider.addEventListener('input', (e) => {
                 timelineValue = parseInt(e.target.value);
@@ -3057,14 +4418,12 @@
                 renderDashboard();
             });
 
-            // Refresh news every 60s
             setInterval(async () => {
                 await fetchNewsFromRSS();
                 if (isExpanded && $('dashboard').classList.contains('active')) renderNewsFeed();
                 if (isStoryMode) renderStoryNews();
             }, 60000);
 
-            // Button ripple effect
             document.querySelectorAll('.btn').forEach(btn => {
                 btn.addEventListener('mousemove', (e) => {
                     const rect = btn.getBoundingClientRect();
@@ -3073,7 +4432,6 @@
                 });
             });
 
-            // GSAP ScrollTrigger
             if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
                 gsap.registerPlugin(ScrollTrigger);
                 gsap.utils.toArray('.story-slide').forEach((slide) => {
@@ -3088,6 +4446,11 @@
                     }
                 });
             }
+
+            // Update real crisis data in story mode
+            setTimeout(() => {
+                renderDashboard();
+            }, 1000);
         }
 
         // Handle resize
@@ -3101,29 +4464,35 @@
             }
             if (cinematicScene) {
                 try {
-                    cinematicScene.renderer.setSize(cinematicScene.container.clientWidth, cinematicScene.container.clientHeight);
-                    cinematicScene.camera.aspect = cinematicScene.container.clientWidth / cinematicScene.container.clientHeight;
+                    cinematicScene.renderer.setSize(cinematicScene.container.clientWidth, cinematicScene.container
+                        .clientHeight);
+                    cinematicScene.camera.aspect = cinematicScene.container.clientWidth / cinematicScene.container
+                        .clientHeight;
                     cinematicScene.camera.updateProjectionMatrix();
                 } catch (e) { /* ignore */ }
             }
             if (leafletMap) { try { leafletMap.invalidateSize(); } catch (e) { /* ignore */ } }
         });
 
-        // PWA: Register service worker (mock)
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/sw.js').catch(() => {});
         }
 
-        // Deep-linking: update URL on map move (mock)
         window.addEventListener('hashchange', () => {
             const hash = window.location.hash.slice(1);
             if (hash) console.log('🔗 Deep-link:', hash);
         });
 
-        // Expose focusEvent globally
         window.focusEvent = function(title) {
             showToast(title, 'Event selected • GCMS CORE X', 'medium');
         };
+
+        // Expose functions globally
+        window.toggleLanguage = toggleLanguage;
+        window.setNewsFilter = setNewsFilter;
+        window.showNewsDetail = showNewsDetail;
+        window.showEventDetail = showEventDetail;
+        window.newsSearch = '';
 
         init();
     </script>
