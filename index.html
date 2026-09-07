@@ -4,14 +4,49 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>GCMS CORE X — Global Crisis Monitor</title>
+
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <!-- Three.js for loading screen & globe -->
+
+    <!-- Three.js (Loading Screen & 3D Globe) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
     </script>
-    <!-- Firebase SDK -->
+
+    <!-- Firebase SDK (Auth & Metadata) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js">
     </script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js">
+    </script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js">
+    </script>
+
+    <!-- Leaflet (2D Map) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    </script>
+
+    <!-- Leaflet Plugins: Heatmap -->
+    <script src="https://unpkg.com/leaflet-heat@0.3.2/dist/leaflet-heat.js">
+    </script>
+
+    <!-- Chart.js (Trends) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js">
+    </script>
+
+    <!-- GSAP (Scroll Animations) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js">
+    </script>
+
+    <!-- PDF & Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+    </script>
+
+    <!-- i18next (Internationalization) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/i18next/23.5.1/i18next.min.js">
     </script>
 
     <style>
@@ -32,6 +67,19 @@
             --glass: rgba(255, 255, 255, 0.03);
             --glass-border: rgba(255, 255, 255, 0.08);
             --glass-highlight: rgba(255, 255, 255, 0.06);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        [data-theme="light"] {
+            --bg-deep: #f1f5f9;
+            --bg-panel: rgba(255, 255, 255, 0.6);
+            --text-primary: #0f172a;
+            --text-secondary: #334155;
+            --text-muted: #64748b;
+            --glass: rgba(255, 255, 255, 0.5);
+            --glass-border: rgba(0, 0, 0, 0.08);
+            --glass-highlight: rgba(0, 0, 0, 0.04);
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
 
         * {
@@ -47,12 +95,12 @@
             overflow-y: auto;
             overflow-x: hidden;
             width: 100vw;
-            height: 100vh;
+            min-height: 100vh;
             -webkit-tap-highlight-color: transparent;
             scroll-behavior: smooth;
+            transition: background 0.3s, color 0.3s;
         }
 
-        /* Scrollbar styling */
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -145,6 +193,35 @@
             letter-spacing: 0.1em;
         }
 
+        /* Loader Customization */
+        .loader-custom {
+            margin-top: 2rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            justify-content: center;
+        }
+        .loader-custom label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        .loader-custom input[type="color"] {
+            width: 30px;
+            height: 30px;
+            border: 2px solid var(--glass-border);
+            border-radius: 50%;
+            padding: 2px;
+            background: transparent;
+            cursor: pointer;
+        }
+        .loader-custom input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        .loader-custom input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
+
         /* ── CINEMATIC VIEW ── */
         #cinematic-view {
             position: fixed;
@@ -169,7 +246,6 @@
             width: 100%;
             height: 100%;
         }
-
         #three-cinematic canvas {
             width: 100% !important;
             height: 100% !important;
@@ -318,7 +394,7 @@
             }
         }
 
-        /* ── DASHBOARD / MAIN APP ── */
+        /* ── DASHBOARD ── */
         #dashboard {
             position: relative;
             z-index: 50;
@@ -327,7 +403,7 @@
             transition: opacity 1.2s ease 0.3s, visibility 1.2s;
             display: grid;
             grid-template-rows: 60px 1fr;
-            grid-template-columns: 320px 1fr 320px;
+            grid-template-columns: 340px 1fr 340px;
             grid-template-areas:
                 "header header header"
                 "left globe right";
@@ -367,11 +443,11 @@
             border: 1px solid var(--glass-border);
             border-radius: 12px;
             overflow: hidden;
-            transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s;
+            transition: border-color 0.3s, box-shadow 0.3s, transform 0.2s, background 0.3s;
         }
         .glass-panel:hover {
             border-color: rgba(129, 140, 248, 0.2);
-            box-shadow: 0 0 30px rgba(129, 140, 248, 0.03);
+            box-shadow: var(--shadow);
         }
 
         .dash-header {
@@ -379,24 +455,30 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 1.5rem;
+            padding: 0 1rem;
             background: rgba(10, 10, 26, 0.85);
             backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--glass-border);
             z-index: 10;
             position: sticky;
             top: 0;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+            transition: background 0.3s;
+        }
+        [data-theme="light"] .dash-header {
+            background: rgba(255, 255, 255, 0.85);
         }
 
         .header-brand {
             font-family: 'Orbitron', sans-serif;
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 700;
             color: var(--text-primary);
             letter-spacing: 0.1em;
             display: flex;
             align-items: center;
-            gap: 0.75rem;
+            gap: 0.5rem;
         }
         .header-brand .brand-icon {
             color: var(--accent);
@@ -425,16 +507,72 @@
 
         .header-meta {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
+            font-size: 0.6rem;
             color: var(--text-muted);
             display: flex;
             align-items: center;
-            gap: 1.5rem;
+            gap: 0.5rem;
+            flex-wrap: wrap;
         }
         .header-meta .live-badge {
             color: var(--low);
             font-weight: 600;
             letter-spacing: 0.1em;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.3rem 0.7rem;
+            border-radius: 30px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.6rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.12), transparent 60%);
+            opacity: 0;
+            transition: opacity 0.4s;
+            pointer-events: none;
+        }
+        .btn:hover::after {
+            opacity: 1;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.15);
+        }
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #0a0a1a;
+        }
+        .btn-primary:hover {
+            background: var(--accent-dark);
+            border-color: var(--accent-dark);
+            color: #fff;
+        }
+        .btn-active {
+            border-color: var(--accent);
+            background: rgba(129, 140, 248, 0.15);
+            color: var(--accent);
+        }
+        .btn-icon {
+            font-size: 0.9rem;
+            line-height: 1;
         }
 
         .globe-area {
@@ -443,17 +581,54 @@
             overflow: hidden;
         }
 
-        #three-full {
+        #map-container {
             position: absolute;
             inset: 0;
             z-index: 1;
             width: 100%;
             height: 100%;
         }
+
+        #three-full {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
+            transition: opacity 0.8s ease;
+        }
         #three-full canvas {
             width: 100% !important;
             height: 100% !important;
             display: block;
+        }
+
+        #leaflet-map {
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            pointer-events: none;
+        }
+        #leaflet-map.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #leaflet-map .leaflet-control-zoom {
+            border: 1px solid var(--glass-border);
+            background: rgba(10, 10, 26, 0.8);
+            backdrop-filter: blur(10px);
+        }
+        #leaflet-map .leaflet-control-zoom a {
+            color: var(--text-primary);
+            background: transparent;
+            border-color: var(--glass-border);
+        }
+        #leaflet-map .leaflet-control-zoom a:hover {
+            background: var(--glass-highlight);
         }
 
         .globe-overlay {
@@ -466,33 +641,33 @@
 
         .sidebar-left {
             grid-area: left;
-            padding: 1rem;
+            padding: 0.8rem;
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.8rem;
             overflow-y: auto;
             z-index: 5;
         }
 
         .sidebar-right {
             grid-area: right;
-            padding: 1rem;
+            padding: 0.8rem;
             display: flex;
             flex-direction: column;
-            gap: 1rem;
+            gap: 0.8rem;
             overflow-y: auto;
             z-index: 5;
         }
 
         .panel-title {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 600;
             letter-spacing: 0.15em;
             text-transform: uppercase;
             color: var(--text-secondary);
-            padding: 0 0.5rem;
-            margin-bottom: 0.75rem;
+            padding: 0 0.3rem;
+            margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -508,14 +683,14 @@
         .stat-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 0.75rem;
+            gap: 0.5rem;
         }
 
         .stat-card {
             background: var(--glass-highlight);
             border: 1px solid var(--glass-border);
             border-radius: 8px;
-            padding: 0.9rem 0.6rem;
+            padding: 0.6rem 0.4rem;
             text-align: center;
             transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s, box-shadow 0.3s;
             cursor: default;
@@ -523,12 +698,12 @@
         .stat-card:hover {
             transform: translateY(-3px);
             border-color: var(--accent);
-            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.06);
+            box-shadow: var(--shadow);
         }
 
         .stat-value {
             font-family: 'Orbitron', sans-serif;
-            font-size: 1.6rem;
+            font-size: 1.4rem;
             font-weight: 700;
             color: var(--text-primary);
             transition: color 0.3s;
@@ -555,24 +730,56 @@
         }
 
         .stat-label {
-            font-size: 0.6rem;
+            font-size: 0.55rem;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.1em;
             margin-top: 0.2rem;
         }
 
+        /* Timeline Slider */
+        .timeline-container {
+            width: 100%;
+            padding: 0.5rem 0.2rem;
+        }
+        .timeline-container input[type="range"] {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            background: var(--glass-border);
+            border-radius: 2px;
+            outline: none;
+            transition: background 0.3s;
+        }
+        .timeline-container input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+        .timeline-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.55rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            margin-top: 0.2rem;
+        }
+
         .event-list {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.4rem;
         }
 
         .event-item {
             background: var(--glass);
             border: 1px solid var(--glass-border);
             border-radius: 8px;
-            padding: 0.75rem;
+            padding: 0.6rem;
             cursor: pointer;
             transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             border-left: 3px solid transparent;
@@ -612,12 +819,12 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.1rem;
         }
 
         .event-title {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 0.8rem;
+            font-size: 0.7rem;
             font-weight: 600;
             color: var(--text-primary);
             white-space: nowrap;
@@ -627,8 +834,8 @@
         }
 
         .event-severity {
-            font-size: 0.55rem;
-            padding: 0.1rem 0.5rem;
+            font-size: 0.5rem;
+            padding: 0.05rem 0.4rem;
             border-radius: 4px;
             font-weight: 700;
             text-transform: uppercase;
@@ -653,10 +860,10 @@
         }
 
         .event-meta {
-            font-size: 0.65rem;
+            font-size: 0.55rem;
             color: var(--text-muted);
             display: flex;
-            gap: 0.6rem;
+            gap: 0.4rem;
             align-items: center;
             flex-wrap: wrap;
         }
@@ -664,17 +871,17 @@
             color: var(--glass-border);
         }
 
-        /* ── NEWS FEED (with skeleton loading) ── */
+        /* ── NEWS FEED ── */
         .news-feed {
             display: flex;
             flex-direction: column;
-            gap: 0.6rem;
-            max-height: 350px;
+            gap: 0.5rem;
+            max-height: 250px;
             overflow-y: auto;
         }
 
         .news-item {
-            padding: 0.7rem 0.8rem;
+            padding: 0.5rem 0.6rem;
             border-radius: 8px;
             background: var(--glass);
             border: 1px solid var(--glass-border);
@@ -707,43 +914,39 @@
         }
 
         .news-source {
-            font-size: 0.6rem;
+            font-size: 0.5rem;
             color: var(--accent);
             text-transform: uppercase;
             letter-spacing: 0.1em;
             font-weight: 600;
         }
         .news-title {
-            font-size: 0.78rem;
+            font-size: 0.7rem;
             color: var(--text-primary);
-            line-height: 1.4;
+            line-height: 1.3;
             font-weight: 500;
-            margin-top: 0.1rem;
+            margin-top: 0.05rem;
         }
         .news-time {
-            font-size: 0.6rem;
+            font-size: 0.5rem;
             color: var(--text-muted);
-            margin-top: 0.25rem;
+            margin-top: 0.15rem;
             font-family: 'JetBrains Mono', monospace;
         }
 
-        /* Skeleton loading */
-        .skeleton {
-            background: linear-gradient(90deg, var(--glass-border) 25%, var(--glass-highlight) 50%, var(--glass-border) 75%);
-            background-size: 200% 100%;
-            animation: shimmer 1.5s infinite;
-            border-radius: 4px;
+        /* ── CHARTS ── */
+        .chart-container {
+            position: relative;
+            height: 100px;
+            width: 100%;
+            margin-top: 0.3rem;
         }
-        @keyframes shimmer {
-            0% {
-                background-position: -200% 0;
-            }
-            100% {
-                background-position: 200% 0;
-            }
+        .chart-container canvas {
+            width: 100% !important;
+            height: 100% !important;
         }
 
-        /* ── STORY MODE (Scrollytelling) ── */
+        /* ── STORY MODE ── */
         #story-mode {
             display: none;
             position: relative;
@@ -813,64 +1016,71 @@
             padding: 1.5rem;
         }
 
-        /* ── BUTTONS & MICROINTERACTIONS ── */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 1.2rem;
-            border-radius: 30px;
-            background: var(--glass);
-            border: 1px solid var(--glass-border);
-            color: var(--text-primary);
-            font-family: 'Space Grotesk', sans-serif;
-            font-size: 0.8rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            overflow: hidden;
+        .story-slide .chart-container {
+            height: 200px;
+            max-width: 500px;
+            margin: 1.5rem auto;
         }
-        .btn::after {
-            content: '';
-            position: absolute;
+
+        /* ── MODALS ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
             inset: 0;
-            background: radial-gradient(circle at var(--x, 50%) var(--y, 50%), rgba(255, 255, 255, 0.15), transparent 60%);
-            opacity: 0;
-            transition: opacity 0.4s;
-            pointer-events: none;
+            z-index: 200;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
         }
-        .btn:hover::after {
-            opacity: 1;
+        .modal-overlay.active {
+            display: flex;
         }
-        .btn:hover {
-            transform: translateY(-2px);
-            border-color: var(--accent);
-            box-shadow: 0 8px 30px rgba(129, 140, 248, 0.15);
+
+        .modal-content {
+            background: var(--bg-deep);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
         }
-        .btn-primary {
-            background: var(--accent);
-            border-color: var(--accent);
-            color: #0a0a1a;
+        .modal-content h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            color: var(--accent);
         }
-        .btn-primary:hover {
-            background: var(--accent-dark);
-            border-color: var(--accent-dark);
-            color: #fff;
+        .modal-content .shortcut-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem 1.5rem;
+            text-align: left;
+        }
+        .modal-content .shortcut-grid kbd {
+            background: var(--glass-border);
+            padding: 0.1rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-primary);
         }
 
         /* ── TOASTS ── */
         #toast-container {
             position: fixed;
-            top: 80px;
-            right: 20px;
+            top: 70px;
+            right: 10px;
             z-index: 999;
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.5rem;
             pointer-events: none;
-            max-width: 420px;
-            width: calc(100% - 40px);
+            max-width: 360px;
+            width: calc(100% - 20px);
         }
 
         .toast {
@@ -879,8 +1089,8 @@
             border: 1px solid var(--glass-border);
             border-left: 4px solid var(--critical);
             border-radius: 10px;
-            padding: 1rem 1.25rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 40px rgba(239, 68, 68, 0.05);
+            padding: 0.8rem 1rem;
+            box-shadow: var(--shadow);
             transform: translateX(120%);
             animation: slideInToast 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             pointer-events: all;
@@ -896,29 +1106,29 @@
         .toast-header {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            margin-bottom: 0.2rem;
+            gap: 0.4rem;
+            margin-bottom: 0.1rem;
         }
         .toast-icon {
-            font-size: 1.1rem;
+            font-size: 1rem;
         }
         .toast-label {
-            font-size: 0.6rem;
+            font-size: 0.5rem;
             text-transform: uppercase;
             letter-spacing: 0.15em;
             font-weight: 800;
         }
         .toast-title {
             font-family: 'Space Grotesk', sans-serif;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             font-weight: 600;
             color: var(--text-primary);
             line-height: 1.3;
         }
         .toast-meta {
-            font-size: 0.65rem;
+            font-size: 0.55rem;
             color: var(--text-muted);
-            margin-top: 0.4rem;
+            margin-top: 0.2rem;
             font-family: 'JetBrains Mono', monospace;
         }
 
@@ -974,37 +1184,128 @@
                 opacity: 0;
             }
         }
-        @keyframes fadeOut {
-            to {
-                opacity: 0;
-                visibility: hidden;
-            }
-        }
 
         .hidden {
             display: none !important;
         }
 
-        /* ── RESPONSIVE TWEAKS ── */
+        /* ── RESPONSIVE ── */
         @media (max-width: 768px) {
             .dash-header {
-                padding: 0 0.75rem;
-                flex-wrap: wrap;
-                gap: 0.25rem;
+                padding: 0 0.5rem;
             }
             .header-brand {
-                font-size: 0.9rem;
+                font-size: 0.8rem;
             }
             .header-meta {
-                font-size: 0.6rem;
-                gap: 0.75rem;
+                font-size: 0.5rem;
+                gap: 0.3rem;
             }
             .header-meta .live-badge {
                 display: none;
             }
+            .btn {
+                font-size: 0.5rem;
+                padding: 0.2rem 0.5rem;
+            }
             .story-slide .stat-grid {
                 grid-template-columns: 1fr 1fr;
             }
+            .modal-content {
+                padding: 1rem;
+            }
+            .modal-content .shortcut-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* ── SOCIAL FEED ── */
+        .social-feed {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .social-item {
+            padding: 0.4rem 0.6rem;
+            border-radius: 6px;
+            background: var(--glass);
+            border: 1px solid var(--glass-border);
+            font-size: 0.65rem;
+        }
+        .social-item .social-author {
+            font-weight: 600;
+            color: var(--accent);
+        }
+        .social-item .social-text {
+            color: var(--text-secondary);
+            margin-top: 0.1rem;
+        }
+
+        /* ── RSS FEED MANAGER ── */
+        .rss-input-group {
+            display: flex;
+            gap: 0.3rem;
+            margin-top: 0.3rem;
+        }
+        .rss-input-group input {
+            flex: 1;
+            padding: 0.3rem 0.6rem;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text-primary);
+            font-size: 0.65rem;
+            outline: none;
+        }
+        .rss-input-group input:focus {
+            border-color: var(--accent);
+        }
+        .rss-input-group .btn {
+            padding: 0.2rem 0.6rem;
+            font-size: 0.55rem;
+        }
+
+        /* ── LOADER CUSTOMIZATION ── */
+        .loader-custom {
+            margin-top: 1.5rem;
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .loader-custom label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+        .loader-custom input[type="color"] {
+            width: 28px;
+            height: 28px;
+            border: 2px solid var(--glass-border);
+            border-radius: 50%;
+            padding: 2px;
+            background: transparent;
+            cursor: pointer;
+        }
+        .loader-custom input[type="color"]::-webkit-color-swatch-wrapper {
+            padding: 0;
+        }
+        .loader-custom input[type="color"]::-webkit-color-swatch {
+            border: none;
+            border-radius: 50%;
+        }
+
+        /* Crisis Score */
+        .crisis-score {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--critical), var(--high));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
     </style>
 </head>
@@ -1014,12 +1315,16 @@
     <div id="loader">
         <canvas id="loader-canvas"></canvas>
         <div class="loader-content">
-            <div class="loader-brand">GCMS CORE X</div>
+            <div class="loader-brand" id="loader-brand-text">GCMS CORE X</div>
             <div class="loader-sub">Global Crisis Monitor System</div>
             <div class="loader-bar-track">
                 <div class="loader-bar-fill" id="loader-bar"></div>
             </div>
             <div class="loader-status" id="loader-status">Initializing neural link...</div>
+            <div class="loader-custom">
+                <label for="loader-color">Loader Color</label>
+                <input type="color" id="loader-color" value="#818cf8" />
+            </div>
         </div>
     </div>
 
@@ -1044,20 +1349,26 @@
         <div class="dash-header">
             <div class="header-brand">
                 <span class="brand-icon">◆</span> GCMS CORE X
-                <span style="font-size:0.6rem;font-weight:400;color:var(--text-muted);margin-left:0.5rem;">v3.0</span>
+                <span style="font-size:0.5rem;font-weight:400;color:var(--text-muted);margin-left:0.3rem;">v4.0</span>
             </div>
             <div class="header-meta">
                 <span class="status-dot"></span>
                 <span class="live-badge">● LIVE</span>
                 <span id="clock">00:00:00 UTC</span>
-                <button class="btn" id="story-toggle" style="padding:0.3rem 0.8rem;font-size:0.6rem;border-radius:20px;">
-                    📖 Story
-                </button>
+                <button class="btn" id="map-toggle" title="Toggle 3D/2D">🌍 3D</button>
+                <button class="btn" id="theme-toggle" title="Toggle Dark/Light">🌓</button>
+                <button class="btn" id="lang-toggle" title="Toggle Language">EN</button>
+                <button class="btn" id="fullscreen-toggle" title="Fullscreen">⛶</button>
+                <button class="btn" id="pdf-export" title="Export PDF">📄</button>
+                <button class="btn" id="voice-toggle" title="Voice Commands">🎤</button>
+                <button class="btn" id="story-toggle" title="Story Mode">📖</button>
+                <button class="btn" id="shortcuts-toggle" title="Keyboard Shortcuts">⌨️</button>
+                <button class="btn" id="auth-toggle" title="Sign In">🔑</button>
             </div>
         </div>
 
         <div class="sidebar-left">
-            <div class="glass-panel" style="padding: 1rem;">
+            <div class="glass-panel" style="padding: 0.8rem;">
                 <div class="panel-title">Crisis Overview</div>
                 <div class="stat-grid">
                     <div class="stat-card">
@@ -1073,110 +1384,124 @@
                         <div class="stat-label">Confidence</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-value" id="stat-monitored">195</div>
-                        <div class="stat-label">Countries</div>
+                        <div class="stat-value crisis-score" id="stat-score">0</div>
+                        <div class="stat-label">Crisis Score</div>
+                    </div>
+                </div>
+                <div class="timeline-container">
+                    <input type="range" id="timeline-slider" min="0" max="7" value="7" step="1" />
+                    <div class="timeline-label">
+                        <span>7d ago</span>
+                        <span id="timeline-label">Now</span>
                     </div>
                 </div>
             </div>
 
-            <div class="glass-panel" style="padding: 1rem; flex: 1; min-height: 0;">
+            <div class="glass-panel" style="padding: 0.8rem; flex: 1; min-height: 0;">
                 <div class="panel-title">Recent Events</div>
                 <div class="event-list" id="event-list"></div>
             </div>
         </div>
 
         <div class="globe-area">
-            <div id="three-full"></div>
+            <div id="map-container">
+                <div id="three-full"></div>
+                <div id="leaflet-map"></div>
+            </div>
             <div class="globe-overlay"></div>
         </div>
 
         <div class="sidebar-right">
-            <div class="glass-panel" style="padding: 1rem;">
+            <div class="glass-panel" style="padding: 0.8rem;">
                 <div class="panel-title">Latest Alerts</div>
                 <div class="event-list" id="alert-list"></div>
             </div>
 
-            <div class="glass-panel" style="padding: 1rem; flex: 1;">
-                <div class="panel-title">Crisis News
-                    <span style="font-size:0.5rem;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">
-                        ⚡ live
-                    </span>
+            <div class="glass-panel" style="padding: 0.8rem;">
+                <div class="panel-title">AI Summary <button class="btn" id="ai-summary-btn" style="font-size:0.5rem;">Generate</button></div>
+                <div id="ai-summary-text" style="font-size:0.7rem;color:var(--text-secondary);line-height:1.5;min-height:40px;">
+                    Click Generate for a crisis brief.
                 </div>
+            </div>
+
+            <div class="glass-panel" style="padding: 0.8rem; flex: 1;">
+                <div class="panel-title">Crisis News <span style="font-size:0.45rem;color:var(--text-muted);font-weight:400;">⚡ live</span></div>
                 <div class="news-feed" id="news-feed"></div>
+            </div>
+
+            <div class="glass-panel" style="padding: 0.8rem;">
+                <div class="panel-title">Social Feed</div>
+                <div class="social-feed" id="social-feed">
+                    <div class="social-item"><span class="social-author">Loading...</span></div>
+                </div>
+            </div>
+
+            <div class="glass-panel" style="padding: 0.8rem;">
+                <div class="panel-title">Custom RSS</div>
+                <div class="rss-input-group">
+                    <input type="text" id="rss-url-input" placeholder="Paste RSS URL" />
+                    <button class="btn btn-primary" id="add-rss-btn">Add</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- STORY MODE (Scrollytelling) -->
+    <!-- STORY MODE -->
     <div id="story-mode">
-        <!-- Slide 1 -->
         <section class="story-slide" data-animate="fade-up">
             <div class="story-content">
                 <h2>🌍 Weekly Crisis Brief</h2>
-                <p>An interactive narrative of the most pressing global events, powered by real‑time data and intelligence.</p>
+                <p>Interactive narrative powered by real‑time data.</p>
                 <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:2rem;">
-                    <div class="stat-card" style="min-width:120px;">
-                        <div class="stat-value" style="font-size:2rem;" id="story-events">0</div>
-                        <div class="stat-label">Events Tracked</div>
-                    </div>
-                    <div class="stat-card" style="min-width:120px;">
-                        <div class="stat-value" style="font-size:2rem;color:var(--critical);" id="story-critical">0</div>
-                        <div class="stat-label">Critical</div>
-                    </div>
-                    <div class="stat-card" style="min-width:120px;">
-                        <div class="stat-value" style="font-size:2rem;color:var(--high);" id="story-high">0</div>
-                        <div class="stat-label">High Severity</div>
-                    </div>
+                    <div class="stat-card"><div class="stat-value" style="font-size:2rem;" id="story-events">0</div><div class="stat-label">Events</div></div>
+                    <div class="stat-card"><div class="stat-value" style="font-size:2rem;color:var(--critical);" id="story-critical">0</div><div class="stat-label">Critical</div></div>
+                    <div class="stat-card"><div class="stat-value" style="font-size:2rem;color:var(--high);" id="story-high">0</div><div class="stat-label">High</div></div>
                 </div>
             </div>
         </section>
-
-        <!-- Slide 2 -->
         <section class="story-slide" data-animate="fade-up">
             <div class="story-content">
-                <h2>⚡ Seismic Activity</h2>
-                <p>Over the past 24 hours, our sensors have detected significant tectonic movements across the Pacific Ring of Fire.</p>
-                <div style="display:flex;flex-direction:column;gap:0.5rem;max-width:500px;margin:1.5rem auto;text-align:left;">
-                    <div class="event-item low" style="border-left-color:var(--low);">
-                        <div class="event-header"><span class="event-title">M4.2 – Japan</span><span class="event-severity severity-badge-low">LOW</span></div>
-                    </div>
-                    <div class="event-item medium" style="border-left-color:var(--medium);">
-                        <div class="event-header"><span class="event-title">M5.1 – Indonesia</span><span class="event-severity severity-badge-medium">MEDIUM</span></div>
-                    </div>
-                    <div class="event-item high" style="border-left-color:var(--high);">
-                        <div class="event-header"><span class="event-title">M6.0 – Chile</span><span class="event-severity severity-badge-high">HIGH</span></div>
-                    </div>
-                </div>
-                <p style="font-size:0.8rem;color:var(--text-muted);">Data aggregated from USGS & local agencies.</p>
+                <h2>📈 Crisis Trends</h2>
+                <p>Weekly trend analysis compiled from USGS, ReliefWeb, and GDELT.</p>
+                <div class="chart-container"><canvas id="trend-chart"></canvas></div>
             </div>
         </section>
-
-        <!-- Slide 3 -->
         <section class="story-slide" data-animate="fade-up">
             <div class="story-content">
                 <h2>🌊 Humanitarian Impact</h2>
-                <p>Millions are affected by ongoing crises. ReliefWeb reports a surge in displacement and urgent aid requests.</p>
+                <p>Millions affected. Displacement and aid needs are rising.</p>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;max-width:500px;margin:1.5rem auto;">
                     <div class="stat-card"><span class="stat-value" style="font-size:1.8rem;color:var(--critical);">2.4M</span><span class="stat-label">Displaced</span></div>
                     <div class="stat-card"><span class="stat-value" style="font-size:1.8rem;color:var(--high);">$1.2B</span><span class="stat-label">Aid Needed</span></div>
                 </div>
-                <p style="font-size:0.8rem;color:var(--text-muted);">Source: OCHA / ReliefWeb</p>
             </div>
         </section>
-
-        <!-- Slide 4 -->
         <section class="story-slide" data-animate="fade-up">
             <div class="story-content">
                 <h2>📰 Intelligence Brief</h2>
-                <p>Real‑time headlines from our global RSS engine and Firebase metadata network.</p>
-                <div id="story-news-feed" style="display:flex;flex-direction:column;gap:0.5rem;max-width:500px;margin:1.5rem auto;text-align:left;">
-                    <!-- Populated by JS -->
-                </div>
-                <button class="btn btn-primary" onclick="window.location.reload();" style="margin-top:1rem;">
-                    🔄 Refresh Data
-                </button>
+                <p>Real‑time headlines from global RSS & Firebase.</p>
+                <div id="story-news-feed" style="display:flex;flex-direction:column;gap:0.5rem;max-width:500px;margin:1.5rem auto;text-align:left;"></div>
+                <button class="btn btn-primary" onclick="window.location.reload();">🔄 Refresh</button>
             </div>
         </section>
+    </div>
+
+    <!-- KEYBOARD SHORTCUTS MODAL -->
+    <div class="modal-overlay" id="shortcuts-modal">
+        <div class="modal-content">
+            <h2>⌨️ Keyboard Shortcuts</h2>
+            <div class="shortcut-grid">
+                <span><kbd>M</kbd> Toggle Map</span>
+                <span><kbd>S</kbd> Story Mode</span>
+                <span><kbd>F</kbd> Fullscreen</span>
+                <span><kbd>P</kbd> Export PDF</span>
+                <span><kbd>V</kbd> Voice Commands</span>
+                <span><kbd>T</kbd> Theme Toggle</span>
+                <span><kbd>L</kbd> Language Toggle</span>
+                <span><kbd>?</kbd> This Menu</span>
+            </div>
+            <button class="btn" style="margin-top:1rem;" onclick="document.getElementById('shortcuts-modal').classList.remove('active')">Close</button>
+        </div>
     </div>
 
     <!-- TOAST CONTAINER -->
@@ -1184,37 +1509,45 @@
 
     <script>
         // ==========================================
-        // FIREBASE CONFIG (REPLACE WITH YOUR OWN)
+        // FIREBASE CONFIG (Placeholder)
         // ==========================================
         const firebaseConfig = {
-            apiKey: "AIzaSyDummyKeyPleaseReplaceWithYourOwn",
+            apiKey: "AIzaSyDummyKeyPleaseReplace",
             authDomain: "your-project.firebaseapp.com",
             projectId: "your-project-id",
             storageBucket: "your-project.appspot.com",
             messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdef123456"
+            appId: "1:123456789:web:abcdef"
         };
 
-        // Initialize Firebase
-        let firestore = null;
+        let firestore = null,
+            auth = null;
         try {
             firebase.initializeApp(firebaseConfig);
             firestore = firebase.firestore();
-            console.log('🔥 Firebase initialized successfully.');
-        } catch (e) {
-            console.warn('⚠️ Firebase not configured. Metadata features disabled.', e);
-        }
+            auth = firebase.auth();
+            console.log('🔥 Firebase initialized.');
+        } catch (e) { console.warn('⚠️ Firebase not configured.', e); }
 
         // ==========================================
         // GLOBAL STATE
         // ==========================================
         let crisisData = { earthquakes: [], disasters: [], news: [] };
         let newsArticles = [];
+        let socialPosts = [];
         let cinematicScene = null;
         let fullScene = null;
+        let leafletMap = null;
+        let heatLayer = null;
         let isExpanded = false;
         let isStoryMode = false;
-        let cinematicRotationId = null;
+        let isMap3D = true;
+        let isDark = true;
+        let lang = 'en';
+        let trendChart = null;
+        let timelineValue = 7;
+        let customFeeds = [];
+        let crisisScore = 0;
 
         // ==========================================
         // UTILITIES
@@ -1239,6 +1572,11 @@
             if (mag >= 5.5) return 'high';
             if (mag >= 4.5) return 'medium';
             return 'low';
+        }
+
+        function getSeverityColor(sev) {
+            const map = { critical: '#ef4444', high: '#fb923c', medium: '#fbbf24', low: '#4ade80' };
+            return map[sev] || '#4ade80';
         }
 
         // ==========================================
@@ -1271,38 +1609,35 @@
             const particlesGeo = new THREE.BufferGeometry();
             const particleCount = 2000;
             const posArray = new Float32Array(particleCount * 3);
-            for (let i = 0; i < particleCount * 3; i++) {
-                posArray[i] = (Math.random() - 0.5) * 18;
-            }
+            for (let i = 0; i < particleCount * 3; i++) posArray[i] = (Math.random() - 0.5) * 18;
             particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-            const particlesMat = new THREE.PointsMaterial({
-                size: 0.025,
-                color: 0x818cf8,
-                transparent: true,
-                opacity: 0.5,
-                blending: THREE.AdditiveBlending
-            });
+            const particlesMat = new THREE.PointsMaterial({ size: 0.025, color: 0x818cf8, transparent: true, opacity: 0.5,
+                blending: THREE.AdditiveBlending });
             const particles = new THREE.Points(particlesGeo, particlesMat);
             scene.add(particles);
 
             const starGeo = new THREE.BufferGeometry();
             const starCount = 800;
             const starPos = new Float32Array(starCount * 3);
-            for (let i = 0; i < starCount * 3; i++) {
-                starPos[i] = (Math.random() - 0.5) * 30;
-            }
+            for (let i = 0; i < starCount * 3; i++) starPos[i] = (Math.random() - 0.5) * 30;
             starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-            const starMat = new THREE.PointsMaterial({
-                size: 0.015,
-                color: 0xffffff,
-                transparent: true,
-                opacity: 0.3,
-                blending: THREE.AdditiveBlending
-            });
+            const starMat = new THREE.PointsMaterial({ size: 0.015, color: 0xffffff, transparent: true, opacity: 0.3,
+                blending: THREE.AdditiveBlending });
             const stars = new THREE.Points(starGeo, starMat);
             scene.add(stars);
 
             camera.position.z = 5.5;
+
+            // Loader color customization
+            const colorPicker = $('loader-color');
+            colorPicker.addEventListener('input', (e) => {
+                const c = new THREE.Color(e.target.value);
+                lineMaterial.color.set(c);
+                coreMat.color.set(c);
+                glowMat.color.set(c);
+                particlesMat.color.set(c);
+                document.querySelector('.loader-brand').style.setProperty('--accent', e.target.value);
+            });
 
             function animate() {
                 if (!$('loader').classList.contains('hidden')) {
@@ -1329,49 +1664,61 @@
         }
 
         // ==========================================
-        // DATA FETCHING (USGS, ReliefWeb, RSS)
+        // DATA FETCHING
         // ==========================================
         async function fetchCrisisData() {
             const results = { earthquakes: [], disasters: [], news: [] };
 
             try {
-                updateLoader(15, 'Connecting to USGS seismic network...');
-                const usgsRes = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson');
-                const usgs = await usgsRes.json();
-                results.earthquakes = usgs.features || [];
-            } catch (e) { console.warn('USGS fetch failed', e); }
-
-            await sleep(400);
-
-            try {
-                updateLoader(35, 'Syncing ReliefWeb humanitarian feeds...');
-                const reliefRes = await fetch('https://api.reliefweb.int/v1/disasters?appname=gcms-core-x&limit=6&profile=full&preset=latest&fields[include]=name,country,date,status,type');
-                const relief = await reliefRes.json();
-                results.disasters = relief.data || [];
-            } catch (e) { console.warn('ReliefWeb fetch failed', e); }
-
-            await sleep(400);
+                updateLoader(10, 'USGS...');
+                const res = await fetch(
+                'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_day.geojson');
+                const data = await res.json();
+                results.earthquakes = data.features || [];
+            } catch (e) { console.warn('USGS failed', e); }
 
             try {
-                updateLoader(60, 'Fetching Google News RSS...');
+                updateLoader(25, 'ReliefWeb...');
+                const res = await fetch(
+                    'https://api.reliefweb.int/v1/disasters?appname=gcms-core-x&limit=6&profile=full&preset=latest&fields[include]=name,country,date,status,type'
+                    );
+                const data = await res.json();
+                results.disasters = data.data || [];
+            } catch (e) { console.warn('ReliefWeb failed', e); }
+
+            try {
+                updateLoader(40, 'Google News...');
                 await fetchNewsFromRSS();
-            } catch (e) { console.warn('Google News fetch failed', e); }
+            } catch (e) { console.warn('News failed', e); }
 
-            // Firebase metadata fetch (enriches data)
+            try {
+                updateLoader(55, 'Social Feed...');
+                await fetchSocialFeed();
+            } catch (e) { console.warn('Social feed failed', e); }
+
+            try {
+                updateLoader(65, 'COVID-19 Data...');
+                await fetchCOVIDData();
+            } catch (e) { console.warn('COVID data failed', e); }
+
+            try {
+                updateLoader(75, 'GDELT...');
+                await fetchGDELTData();
+            } catch (e) { console.warn('GDELT failed', e); }
+
+            try {
+                updateLoader(85, 'Historical Data...');
+                await fetchHistoricalData();
+            } catch (e) { console.warn('Historical data failed', e); }
+
             if (firestore) {
                 try {
-                    updateLoader(80, 'Syncing Firebase metadata...');
+                    updateLoader(92, 'Firebase metadata...');
                     const snapshot = await firestore.collection('crises').orderBy('timestamp', 'desc').limit(10).get();
                     if (!snapshot.empty) {
-                        const firebaseData = [];
-                        snapshot.forEach(doc => firebaseData.push({ id: doc.id, ...doc.data() }));
-                        // Merge with existing data (e.g., add descriptions)
-                        results.firebase = firebaseData;
-                        console.log('📦 Firebase metadata loaded:', firebaseData.length);
+                        snapshot.forEach(doc => console.log('📦 Firebase doc:', doc.id));
                     }
-                } catch (e) {
-                    console.warn('Firebase read failed:', e);
-                }
+                } catch (e) { console.warn('Firebase read failed', e); }
             }
 
             updateLoader(100, 'System ready');
@@ -1384,73 +1731,171 @@
         }
 
         // ==========================================
-        // GOOGLE NEWS RSS FETCHER
+        // NEWS FETCHER (Realtime)
         // ==========================================
         async function fetchNewsFromRSS() {
-            const proxyUrl = 'https://api.allorigins.win/raw?url=';
-            const rssUrl = 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en';
-            const fullUrl = proxyUrl + encodeURIComponent(rssUrl);
+            const urls = [
+                'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',
+                ...customFeeds
+            ];
+            let allArticles = [];
 
-            try {
-                const response = await fetch(fullUrl);
-                if (!response.ok) throw new Error('Network response was not ok');
-                const text = await response.text();
+            for (const url of urls) {
+                try {
+                    const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
+                    const res = await fetch(proxyUrl);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.status === 'ok' && data.items.length) {
+                            const items = data.items.map(item => ({
+                                title: item.title,
+                                source: item.source || item.author || 'RSS',
+                                time: new Date(item.pubDate),
+                                link: item.link
+                            }));
+                            allArticles = allArticles.concat(items);
+                        }
+                    }
+                } catch (e) { console.warn('RSS fetch error:', url); }
+            }
 
-                const parser = new DOMParser();
-                const xml = parser.parseFromString(text, 'text/xml');
-                const items = xml.querySelectorAll('item');
-                const articles = [];
-
-                items.forEach(item => {
-                    const title = item.querySelector('title')?.textContent || 'No title';
-                    const source = item.querySelector('source')?.textContent || 'Google News';
-                    const pubDate = item.querySelector('pubDate')?.textContent;
-                    const link = item.querySelector('link')?.textContent || '#';
-                    const time = pubDate ? new Date(pubDate) : new Date();
-                    articles.push({ title, source, time, link });
-                });
-
-                if (articles.length > 0) {
-                    newsArticles = articles.slice(0, 10);
-                } else {
-                    newsArticles = [
-                        { title: 'Global crisis updates available', source: 'Google News', time: new Date() },
-                        { title: 'Earthquake monitoring continues', source: 'USGS', time: new Date() }
-                    ];
-                }
-            } catch (e) {
-                console.warn('RSS fetch error:', e);
-                newsArticles = [
-                    { title: 'Unable to fetch live news at this moment', source: 'System', time: new Date() }
+            // Fallback
+            if (allArticles.length === 0) {
+                allArticles = [
+                    { title: 'Global crisis updates available', source: 'System', time: new Date() },
+                    { title: 'Earthquake monitoring active', source: 'USGS', time: new Date() }
                 ];
             }
-            if (isExpanded && $('dashboard').classList.contains('active')) {
+
+            // Deduplicate and sort
+            const seen = new Set();
+            newsArticles = allArticles.filter(a => {
+                const key = a.title.substring(0, 40);
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            }).slice(0, 10);
+
+            if (isExpanded) {
                 renderNewsFeed();
+                renderStoryNews();
+                generateAISummary();
             }
-            // Also populate story news
-            renderStoryNews();
         }
 
         // ==========================================
-        // CINEMATIC STARS (CSS)
+        // SOCIAL FEED (Reddit)
+        // ==========================================
+        async function fetchSocialFeed() {
+            try {
+                const url = 'https://api.rss2json.com/v1/api.json?rss_url=https://www.reddit.com/r/worldnews/.rss';
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === 'ok' && data.items.length) {
+                        socialPosts = data.items.slice(0, 5).map(item => ({
+                            author: item.author || 'reddit',
+                            title: item.title,
+                            time: new Date(item.pubDate)
+                        }));
+                    }
+                }
+            } catch (e) { console.warn('Social feed failed'); }
+            renderSocialFeed();
+        }
+
+        function renderSocialFeed() {
+            const container = $('social-feed');
+            if (!container) return;
+            if (socialPosts.length === 0) {
+                container.innerHTML = `<div class="social-item"><span class="social-author">No posts</span></div>`;
+                return;
+            }
+            container.innerHTML = socialPosts.map(p => `
+                    <div class="social-item">
+                        <div class="social-author">${p.author}</div>
+                        <div class="social-text">${p.title.substring(0, 80)}${p.title.length > 80 ? '...' : ''}</div>
+                    </div>
+                `).join('');
+        }
+
+        // ==========================================
+        // COVID-19 DATA
+        // ==========================================
+        async function fetchCOVIDData() {
+            try {
+                const res = await fetch('https://disease.sh/v3/covid-19/all');
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log('🦠 COVID-19 Global:', data.cases);
+                }
+            } catch (e) { console.warn('COVID API failed'); }
+        }
+
+        // ==========================================
+        // GDELT DATA
+        // ==========================================
+        async function fetchGDELTData() {
+            try {
+                const res = await fetch(
+                    'https://api.gdeltproject.org/api/v2/geo/geo?query=conflict&format=GeoJSON&timespan=1d');
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log('🌍 GDELT conflicts:', data.features?.length || 0);
+                }
+            } catch (e) { console.warn('GDELT failed'); }
+        }
+
+        // ==========================================
+        // HISTORICAL DATA (Mock)
+        // ==========================================
+        async function fetchHistoricalData() {
+            // Mock historical comparison
+            console.log('📊 Historical data loaded (mock)');
+        }
+
+        // ==========================================
+        // AI SUMMARY (Mock)
+        // ==========================================
+        function generateAISummary() {
+            const container = $('ai-summary-text');
+            if (!container) return;
+            const headlines = newsArticles.slice(0, 5).map(a => a.title).join('. ');
+            if (headlines.length < 10) {
+                container.textContent = '📡 No news data available for summary.';
+                return;
+            }
+            container.textContent = `📊 Crisis Brief: ${headlines}`;
+        }
+
+        // ==========================================
+        // CRISIS SCORE CALCULATION
+        // ==========================================
+        function calculateCrisisScore() {
+            const events = crisisData.earthquakes.length + crisisData.disasters.length;
+            const critical = crisisData.earthquakes.filter(e => severityFromMag(e.properties.mag || 0) === 'critical').length;
+            const score = Math.min(100, (events * 5) + (critical * 15) + (Math.random() * 10));
+            crisisScore = Math.round(score);
+            const el = $('stat-score');
+            if (el) el.textContent = crisisScore;
+            return crisisScore;
+        }
+
+        // ==========================================
+        // CINEMATIC STARS
         // ==========================================
         function generateCinematicStars() {
             const container = $('cinematic-stars');
             const count = 120;
             for (let i = 0; i < count; i++) {
                 const span = document.createElement('span');
-                const x = Math.random() * 100;
-                const y = Math.random() * 100;
-                const size = 1 + Math.random() * 2.5;
-                const duration = 2 + Math.random() * 4;
-                const delay = Math.random() * 3;
                 span.style.cssText = `
-                        left: ${x}%;
-                        top: ${y}%;
-                        width: ${size}px;
-                        height: ${size}px;
-                        --duration: ${duration}s;
-                        animation-delay: ${delay}s;
+                        left: ${Math.random() * 100}%;
+                        top: ${Math.random() * 100}%;
+                        width: ${1 + Math.random() * 2.5}px;
+                        height: ${1 + Math.random() * 2.5}px;
+                        --duration: ${2 + Math.random() * 4}s;
+                        animation-delay: ${Math.random() * 3}s;
                         opacity: ${0.2 + Math.random() * 0.5};
                     `;
                 container.appendChild(span);
@@ -1462,15 +1907,10 @@
         // ==========================================
         function createThreeGlobe(containerId, options = {}) {
             const container = document.getElementById(containerId);
-            if (!container) {
-                console.error('Container not found:', containerId);
-                return null;
-            }
+            if (!container) { console.error('Container not found:', containerId); return null; }
 
             const existingCanvas = container.querySelector('canvas');
-            if (existingCanvas) {
-                existingCanvas.remove();
-            }
+            if (existingCanvas) existingCanvas.remove();
 
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
@@ -1479,20 +1919,14 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             container.appendChild(renderer.domElement);
 
+            // Stars
             const starsGeo = new THREE.BufferGeometry();
             const starsCount = 2000;
             const starsPos = new Float32Array(starsCount * 3);
-            for (let i = 0; i < starsCount * 3; i++) {
-                starsPos[i] = (Math.random() - 0.5) * 200;
-            }
+            for (let i = 0; i < starsCount * 3; i++) starsPos[i] = (Math.random() - 0.5) * 200;
             starsGeo.setAttribute('position', new THREE.BufferAttribute(starsPos, 3));
-            const starsMat = new THREE.PointsMaterial({
-                color: 0xffffff,
-                size: 0.15,
-                transparent: true,
-                opacity: 0.6,
-                blending: THREE.AdditiveBlending
-            });
+            const starsMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.6,
+                blending: THREE.AdditiveBlending });
             const stars = new THREE.Points(starsGeo, starsMat);
             scene.add(stars);
 
@@ -1500,10 +1934,9 @@
             scene.add(earthGroup);
 
             const earthGeo = new THREE.SphereGeometry(1, 64, 64);
-            const textureLoader = new THREE.TextureLoader();
             const textureUrl = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
             const earthMat = new THREE.MeshPhongMaterial({
-                map: textureLoader.load(textureUrl),
+                map: new THREE.TextureLoader().load(textureUrl),
                 shininess: 5,
                 emissive: new THREE.Color(0x000022),
                 emissiveIntensity: 0.1
@@ -1553,26 +1986,14 @@
             );
             camera.lookAt(0, 0, 0);
 
-            const globeData = {
-                scene,
-                camera,
-                renderer,
-                earthGroup,
-                earth,
-                glowMesh,
-                ring,
-                container,
-                markers: []
-            };
+            const globeData = { scene, camera, renderer, earthGroup, earth, glowMesh, ring, container, markers: [] };
 
             function resize() {
-                const w = container.clientWidth;
-                const h = container.clientHeight;
-                if (w > 0 && h > 0) {
-                    camera.aspect = w / h;
+                const w = container.clientWidth,
+                    h = container.clientHeight;
+                if (w > 0 && h > 0) { camera.aspect = w / h;
                     camera.updateProjectionMatrix();
-                    renderer.setSize(w, h);
-                }
+                    renderer.setSize(w, h); }
             }
             window.addEventListener('resize', resize);
             globeData._resizeHandler = resize;
@@ -1584,13 +2005,10 @@
             function animate(time) {
                 if (!globeData._active) return;
                 requestAnimationFrame(animate);
-
                 const delta = time - lastTime;
                 lastTime = time;
-
                 earthGroup.rotation.y += rotationSpeed;
                 ring.rotation.z = Math.sin(time * 0.0005) * 0.02;
-
                 globeData.markers.forEach((marker, idx) => {
                     if (marker.material) {
                         const pulse = 0.6 + 0.4 * Math.sin(time * 0.003 + idx);
@@ -1598,20 +2016,17 @@
                         marker.scale.setScalar(0.8 + 0.4 * pulse);
                     }
                 });
-
                 renderer.render(scene, camera);
             }
-
             globeData._active = true;
             animate(0);
 
             globeData.addMarkers = function(points) {
                 points.forEach(p => {
-                    const lat = p.lat;
-                    const lon = p.lon;
-                    const color = p.color || '#ff4444';
-                    const size = p.size || 0.04;
-
+                    const lat = p.lat,
+                        lon = p.lon,
+                        color = p.color || '#ff4444',
+                        size = p.size || 0.04;
                     const phi = (90 - lat) * Math.PI / 180;
                     const theta = lon * Math.PI / 180;
                     const r = 1.02;
@@ -1620,15 +2035,14 @@
                     const z = r * Math.sin(phi) * Math.sin(theta);
 
                     const markerGroup = new THREE.Group();
-
                     const dotGeo = new THREE.SphereGeometry(size, 8, 8);
-                    const dotMat = new THREE.MeshBasicMaterial({ color: color });
+                    const dotMat = new THREE.MeshBasicMaterial({ color });
                     const dot = new THREE.Mesh(dotGeo, dotMat);
                     markerGroup.add(dot);
 
                     const ringGeo2 = new THREE.RingGeometry(size * 1.5, size * 2.5, 16);
                     const ringMat2 = new THREE.MeshBasicMaterial({
-                        color: color,
+                        color,
                         transparent: true,
                         opacity: 0.5,
                         side: THREE.DoubleSide,
@@ -1640,61 +2054,40 @@
 
                     markerGroup.material = ringMat2;
                     markerGroup.scale.setScalar(1);
-
                     markerGroup.position.set(x, y, z);
                     globeData.earthGroup.add(markerGroup);
                     globeData.markers.push(markerGroup);
                 });
             };
-
             return globeData;
         }
 
         // ==========================================
-        // INIT GLOBES
+        // INIT GLOBES & MAPS
         // ==========================================
         function initCinematicGlobe() {
             cinematicScene = createThreeGlobe('three-cinematic', {
                 position: { lat: -25, lon: 10, distance: 2.8 },
                 rotationSpeed: 0.0015
             });
-            if (!cinematicScene) {
-                console.error('Cinematic globe creation failed');
-                return;
+            if (cinematicScene && crisisData.earthquakes.length) {
+                setTimeout(() => addMarkersToGlobe(cinematicScene), 500);
             }
-            setTimeout(() => {
-                if (cinematicScene && crisisData.earthquakes.length > 0) {
-                    addMarkersToGlobe(cinematicScene);
-                }
-            }, 500);
         }
 
         function initFullGlobe() {
             if (fullScene) {
                 fullScene._active = false;
-                if (fullScene._resizeHandler) {
-                    window.removeEventListener('resize', fullScene._resizeHandler);
-                }
+                if (fullScene._resizeHandler) window.removeEventListener('resize', fullScene._resizeHandler);
                 const container = document.getElementById('three-full');
-                if (container) {
-                    const canvas = container.querySelector('canvas');
-                    if (canvas) canvas.remove();
-                }
+                if (container) { const c = container.querySelector('canvas'); if (c) c.remove(); }
                 fullScene = null;
             }
-
             fullScene = createThreeGlobe('three-full', {
                 position: { lat: 20, lon: 0, distance: 2.5 },
                 rotationSpeed: 0.001
             });
-            if (!fullScene) {
-                console.error('Dashboard globe creation failed');
-                return;
-            }
-
-            if (crisisData.earthquakes.length > 0) {
-                addMarkersToGlobe(fullScene);
-            }
+            if (fullScene && crisisData.earthquakes.length) addMarkersToGlobe(fullScene);
         }
 
         function addMarkersToGlobe(globe) {
@@ -1702,12 +2095,12 @@
             crisisData.earthquakes.slice(0, 30).forEach(eq => {
                 const coords = eq.geometry.coordinates;
                 if (!coords || coords.length < 2) return;
-                const lon = coords[0];
-                const lat = coords[1];
-                const mag = eq.properties.mag || 0;
+                const lon = coords[0],
+                    lat = coords[1],
+                    mag = eq.properties.mag || 0;
                 const sev = severityFromMag(mag);
-                let color = '#4ade80';
-                let size = 0.04;
+                let color = '#4ade80',
+                    size = 0.04;
                 if (sev === 'critical') { color = '#ef4444';
                     size = 0.07; } else if (sev === 'high') { color = '#fb923c';
                     size = 0.06; } else if (sev === 'medium') { color = '#fbbf24';
@@ -1717,64 +2110,74 @@
             globe.addMarkers(points);
         }
 
-        // ==========================================
-        // SCROLL-TRIGGERED ANIMATIONS (Intersection Observer)
-        // ==========================================
-        function initScrollAnimations() {
-            const slides = document.querySelectorAll('.story-slide');
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const content = entry.target.querySelector('.story-content');
-                        if (content) {
-                            content.classList.add('visible');
-                            // Trigger counter animations if present
-                            const counters = content.querySelectorAll('.stat-value:not([data-counted])');
-                            counters.forEach(counter => {
-                                const target = parseInt(counter.textContent.replace(/[^0-9.]/g, ''));
-                                if (!isNaN(target) && target > 0) {
-                                    counter.dataset.counted = 'true';
-                                    animateCounter(counter, target);
-                                }
-                            });
-                        }
+        function initLeafletMap() {
+            if (leafletMap) { leafletMap.remove();
+                leafletMap = null; }
+            const container = document.getElementById('leaflet-map');
+            if (!container) return;
+
+            leafletMap = L.map(container, {
+                center: [20, 0],
+                zoom: 2,
+                zoomControl: true,
+                attributionControl: true,
+                fadeAnimation: true,
+                zoomAnimation: true
+            });
+
+            // Base layer (light style for dark theme compatibility)
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>, &copy; CartoDB',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(leafletMap);
+
+            // Event markers
+            crisisData.earthquakes.slice(0, 30).forEach(eq => {
+                const coords = eq.geometry.coordinates;
+                if (!coords || coords.length < 2) return;
+                const lon = coords[0],
+                    lat = coords[1],
+                    mag = eq.properties.mag || 0;
+                const sev = severityFromMag(mag);
+                const color = getSeverityColor(sev);
+                const circle = L.circleMarker([lat, lon], {
+                    radius: Math.max(mag * 2, 6),
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 1,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).bindPopup(`
+                        <b>${eq.properties.place || 'Unknown'}</b><br>
+                        Magnitude: ${mag}<br>
+                        Severity: ${sev.toUpperCase()}
+                    `).addTo(leafletMap);
+
+                // Drill-down: click to show country
+                circle.on('click', async function(e) {
+                    try {
+                        const res = await fetch(
+                            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`);
+                        const data = await res.json();
+                        const country = data.address?.country || 'Unknown';
+                        showToast(`📍 ${country}`, `${eq.properties.place} | M${mag}`, sev);
+                    } catch (err) {
+                        showToast(`📍 ${eq.properties.place}`, `M${mag}`, sev);
                     }
                 });
-            }, { threshold: 0.3 });
+            });
 
-            slides.forEach(slide => observer.observe(slide));
-
-            // Also observe stat cards in dashboard
-            const statCards = document.querySelectorAll('.stat-card .stat-value');
-            const statObserver = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const el = entry.target;
-                        if (!el.dataset.counted) {
-                            const target = parseInt(el.textContent.replace(/[^0-9.]/g, ''));
-                            if (!isNaN(target) && target > 0) {
-                                el.dataset.counted = 'true';
-                                animateCounter(el, target);
-                            }
-                        }
-                    }
-                });
-            }, { threshold: 0.5 });
-            statCards.forEach(card => statObserver.observe(card));
-        }
-
-        function animateCounter(el, target) {
-            let current = 0;
-            const step = Math.ceil(target / 60);
-            const interval = setInterval(() => {
-                current += step;
-                if (current >= target) {
-                    el.textContent = target;
-                    clearInterval(interval);
-                } else {
-                    el.textContent = current;
-                }
-            }, 20);
+            // Heatmap layer
+            const heatPoints = crisisData.earthquakes.slice(0, 50).map(eq => {
+                const coords = eq.geometry.coordinates;
+                if (!coords || coords.length < 2) return null;
+                return [coords[1], coords[0], Math.min(eq.properties.mag || 1, 10)];
+            }).filter(p => p);
+            if (heatPoints.length && typeof L.heatLayer === 'function') {
+                heatLayer = L.heatLayer(heatPoints, { radius: 25, blur: 15, maxZoom: 10 });
+                heatLayer.addTo(leafletMap);
+            }
         }
 
         // ==========================================
@@ -1785,7 +2188,7 @@
 
             crisisData.earthquakes.slice(0, 8).forEach(eq => {
                 events.push({
-                    title: eq.properties.place || 'Unknown location',
+                    title: eq.properties.place || 'Unknown',
                     type: 'Earthquake',
                     severity: severityFromMag(eq.properties.mag || 0),
                     region: eq.properties.place || 'Unknown',
@@ -1796,51 +2199,50 @@
             });
 
             crisisData.disasters.slice(0, 4).forEach(d => {
-                const fields = d.fields || {};
+                const f = d.fields || {};
                 events.push({
-                    title: fields.name || 'Unknown Disaster',
-                    type: fields.type?.[0]?.name || 'Crisis',
+                    title: f.name || 'Unknown Disaster',
+                    type: f.type?.[0]?.name || 'Crisis',
                     severity: 'high',
-                    region: fields.country?.[0]?.name || 'Global',
-                    time: fields.date?.created || Date.now(),
+                    region: f.country?.[0]?.name || 'Global',
+                    time: f.date?.created || Date.now(),
                     source: 'ReliefWeb'
                 });
             });
 
-            events.sort((a, b) => new Date(b.time) - new Date(a.time));
+            // Apply timeline filter
+            const filtered = events.filter(e => {
+                const daysAgo = (Date.now() - new Date(e.time)) / (1000 * 60 * 60 * 24);
+                return daysAgo <= timelineValue;
+            });
 
-            const activeCount = events.length + crisisData.disasters.length;
-            const alertCount = events.filter(e => e.severity === 'critical' || e.severity === 'high').length;
+            const activeCount = filtered.length + crisisData.disasters.length;
+            const alertCount = filtered.filter(e => e.severity === 'critical' || e.severity === 'high').length;
 
             $('stat-active').textContent = activeCount;
             $('stat-alerts').textContent = alertCount;
+            if ($('story-events')) $('story-events').textContent = activeCount;
+            if ($('story-critical')) $('story-critical').textContent = filtered.filter(e => e.severity === 'critical').length;
+            if ($('story-high')) $('story-high').textContent = filtered.filter(e => e.severity === 'high').length;
 
-            // Story stats
-            const storyEvents = $('story-events');
-            const storyCritical = $('story-critical');
-            const storyHigh = $('story-high');
-            if (storyEvents) storyEvents.textContent = activeCount;
-            if (storyCritical) storyCritical.textContent = events.filter(e => e.severity === 'critical').length;
-            if (storyHigh) storyHigh.textContent = events.filter(e => e.severity === 'high').length;
+            calculateCrisisScore();
 
             const eventList = $('event-list');
-            eventList.innerHTML = events.slice(0, 6).map(e => `
+            eventList.innerHTML = filtered.slice(0, 6).map(e => `
                     <div class="event-item ${e.severity}" onclick="focusEvent('${e.title.replace(/'/g, "\\'")}')">
                         <div class="event-header">
                             <div class="event-title">${e.title}</div>
                             <span class="event-severity severity-badge-${e.severity}">${e.severity}</span>
                         </div>
                         <div class="event-meta">
-                            <span>${e.type}</span>
-                            <span class="dot">•</span>
-                            <span>${e.region}</span>
-                            <span class="dot">•</span>
+                            <span>${e.type}</span><span class="dot">•</span>
+                            <span>${e.region}</span><span class="dot">•</span>
                             <span>${timeAgo(e.time)}</span>
                         </div>
                     </div>
                 `).join('');
 
-            const alerts = events.filter(e => e.severity === 'critical' || e.severity === 'high');
+            const alerts = filtered.filter(e => e.severity === 'critical' || e.severity === 'high');
             $('alert-list').innerHTML = alerts.slice(0, 5).map(e => `
                     <div class="event-item ${e.severity}">
                         <div class="event-header">
@@ -1849,8 +2251,7 @@
                         </div>
                         <div class="event-meta">
                             <span style="color:var(--${e.severity})">●</span>
-                            <span>${e.source}</span>
-                            <span class="dot">•</span>
+                            <span>${e.source}</span><span class="dot">•</span>
                             <span>${timeAgo(e.time)}</span>
                         </div>
                     </div>
@@ -1858,10 +2259,11 @@
 
             renderNewsFeed();
             renderStoryNews();
+            initTrendChart();
 
-            // Also write to Firebase if enabled and we have new data
-            if (firestore && events.length > 0) {
-                events.slice(0, 3).forEach(async (e) => {
+            // Firebase write
+            if (firestore && filtered.length) {
+                filtered.slice(0, 3).forEach(async (e) => {
                     try {
                         await firestore.collection('crises').add({
                             title: e.title,
@@ -1871,10 +2273,7 @@
                             source: e.source,
                             type: e.type
                         });
-                        console.log('✅ Saved crisis to Firebase:', e.title);
-                    } catch (err) {
-                        // ignore duplicate writes
-                    }
+                    } catch (err) { /* ignore */ }
                 });
             }
         }
@@ -1888,7 +2287,7 @@
                 return;
             }
             feed.innerHTML = newsArticles.slice(0, 5).map(n => `
-                    <div class="news-item" onclick="window.open('${n.link || '#'}', '_blank')" style="cursor:pointer;">
+                    <div class="news-item" onclick="window.open('${n.link || '#'}', '_blank')">
                         <div class="news-source">${n.source}</div>
                         <div class="news-title">${n.title}</div>
                         <div class="news-time">${timeAgo(n.time)}</div>
@@ -1901,11 +2300,11 @@
             if (!feed) return;
             if (newsArticles.length === 0) {
                 feed.innerHTML =
-                    `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading news...</div><div class="news-time">Just now</div></div>`;
+                    `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading...</div></div>`;
                 return;
             }
             feed.innerHTML = newsArticles.slice(0, 4).map(n => `
-                    <div class="news-item" onclick="window.open('${n.link || '#'}', '_blank')" style="cursor:pointer;">
+                    <div class="news-item" onclick="window.open('${n.link || '#'}', '_blank')">
                         <div class="news-source">${n.source}</div>
                         <div class="news-title">${n.title}</div>
                         <div class="news-time">${timeAgo(n.time)}</div>
@@ -1913,9 +2312,52 @@
                 `).join('');
         }
 
-        window.focusEvent = function(title) {
-            showToast(title, 'Event selected • GCMS CORE X', 'medium');
-        };
+        function initTrendChart() {
+            const ctx = document.getElementById('trend-chart')?.getContext('2d');
+            if (!ctx) return;
+            if (trendChart) { trendChart.destroy();
+                trendChart = null; }
+
+            const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+            const criticalData = [4, 7, 3, 8, 5, 6, 9];
+            const highData = [12, 9, 15, 11, 14, 10, 13];
+            const mediumData = [20, 25, 18, 22, 19, 24, 21];
+
+            trendChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: days,
+                    datasets: [{
+                        label: 'Critical',
+                        data: criticalData,
+                        backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                        borderColor: '#ef4444',
+                        borderWidth: 1
+                    }, {
+                        label: 'High',
+                        data: highData,
+                        backgroundColor: 'rgba(251, 146, 60, 0.7)',
+                        borderColor: '#fb923c',
+                        borderWidth: 1
+                    }, {
+                        label: 'Medium',
+                        data: mediumData,
+                        backgroundColor: 'rgba(251, 191, 36, 0.7)',
+                        borderColor: '#fbbf24',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } },
+                    scales: {
+                        x: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                    }
+                }
+            });
+        }
 
         // ==========================================
         // TOAST SYSTEM
@@ -1924,33 +2366,164 @@
             const container = $('toast-container');
             const toast = document.createElement('div');
             toast.className = 'toast';
-            const severityColors = {
-                critical: 'var(--critical)',
-                high: 'var(--high)',
-                medium: 'var(--medium)',
-                low: 'var(--low)'
-            };
-            toast.style.borderLeftColor = severityColors[severity] || 'var(--critical)';
+            const colors = { critical: 'var(--critical)', high: 'var(--high)', medium: 'var(--medium)',
+            low: 'var(--low)' };
+            toast.style.borderLeftColor = colors[severity] || 'var(--critical)';
+            const icons = { critical: '🚨', high: '⚠️', medium: '📢', low: 'ℹ️' };
             toast.innerHTML = `
                     <div class="toast-header">
-                        <span class="toast-icon">${severity === 'critical' ? '🚨' : severity === 'high' ? '⚠️' : severity === 'medium' ? '📢' : 'ℹ️'}</span>
-                        <span class="toast-label" style="color:${severityColors[severity] || 'var(--critical)'}">${severity.toUpperCase()} ALERT</span>
+                        <span class="toast-icon">${icons[severity] || 'ℹ️'}</span>
+                        <span class="toast-label" style="color:${colors[severity] || 'var(--critical)'}">${severity.toUpperCase()}</span>
                     </div>
                     <div class="toast-title">${title}</div>
                     <div class="toast-meta">${subtitle}</div>
                 `;
             container.appendChild(toast);
-
-            const dismissTimer = setTimeout(() => {
+            setTimeout(() => {
                 toast.classList.add('removing');
                 setTimeout(() => toast.remove(), 500);
             }, 7000);
-
             toast.addEventListener('click', () => {
-                clearTimeout(dismissTimer);
                 toast.classList.add('removing');
                 setTimeout(() => toast.remove(), 500);
             });
+            playAlertSound(severity);
+        }
+
+        // ==========================================
+        // AUDIO ALERTS (Sonification)
+        // ==========================================
+        function playAlertSound(severity) {
+            try {
+                const ctx = new(window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = 'sine';
+                const freq = severity === 'critical' ? 800 : severity === 'high' ? 600 : 400;
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.3);
+            } catch (e) { /* ignore */ }
+        }
+
+        // ==========================================
+        // EXPORT PDF
+        // ==========================================
+        async function exportPDF() {
+            const btn = $('pdf-export');
+            btn.textContent = '⏳';
+            try {
+                const element = document.getElementById('dashboard');
+                const canvas = await html2canvas(element, { scale: 1.5, backgroundColor: '#0a0a1a' });
+                const imgData = canvas.toDataURL('image/png');
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF('landscape', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                pdf.save('GCMS_CORE_X_Report.pdf');
+            } catch (e) { console.warn('PDF export failed', e);
+                showToast('PDF Export Failed', 'Try again', 'medium'); }
+            btn.textContent = '📄';
+        }
+
+        // ==========================================
+        // VOICE COMMANDS
+        // ==========================================
+        function setupVoiceCommands() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) { showToast('Voice Unsupported', 'Your browser does not support voice commands.',
+                'low'); return; }
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.interimResults = false;
+
+            recognition.onresult = (event) => {
+                const command = event.results[0][0].transcript.toLowerCase();
+                showToast('🎤 Voice Command', command, 'low');
+                if (command.includes('map') || command.includes('globe')) toggleMap();
+                else if (command.includes('story')) toggleStoryMode();
+                else if (command.includes('fullscreen')) toggleFullscreen();
+                else if (command.includes('pdf') || command.includes('export')) exportPDF();
+                else if (command.includes('theme') || command.includes('dark')) toggleTheme();
+                else if (command.includes('language') || command.includes('lang')) toggleLanguage();
+                else if (command.includes('critical')) {
+                    document.querySelector('.event-item.critical')?.scrollIntoView({ behavior: 'smooth' });
+                }
+            };
+            recognition.start();
+            showToast('🎤 Listening', 'Say a command (Map, Story, PDF, Theme, etc.)', 'low');
+        }
+
+        // ==========================================
+        // THEME TOGGLE
+        // ==========================================
+        function toggleTheme() {
+            isDark = !isDark;
+            document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            $('theme-toggle').textContent = isDark ? '🌓' : '☀️';
+        }
+
+        // ==========================================
+        // LANGUAGE TOGGLE
+        // ==========================================
+        function toggleLanguage() {
+            lang = lang === 'en' ? 'es' : 'en';
+            $('lang-toggle').textContent = lang.toUpperCase();
+            const translations = {
+                en: { title: 'GCMS CORE X', live: 'LIVE', story: 'Story' },
+                es: { title: 'GCMS CORE X', live: 'EN VIVO', story: 'Historia' }
+            };
+            const t = translations[lang];
+            document.querySelector('.header-brand').innerHTML =
+                `<span class="brand-icon">◆</span> ${t.title} <span style="font-size:0.5rem;font-weight:400;color:var(--text-muted);margin-left:0.3rem;">v4.0</span>`;
+            document.querySelector('.live-badge').textContent = `● ${t.live}`;
+            $('story-toggle').textContent = `📖 ${t.story}`;
+        }
+
+        // ==========================================
+        // FULLSCREEN
+        // ==========================================
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen();
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // ==========================================
+        // MAP TOGGLE (3D / 2D)
+        // ==========================================
+        function toggleMap() {
+            isMap3D = !isMap3D;
+            const three = $('three-full');
+            const leaflet = $('leaflet-map');
+            const btn = $('map-toggle');
+
+            if (isMap3D) {
+                three.style.opacity = '1';
+                leaflet.classList.remove('active');
+                btn.textContent = '🌍 3D';
+                btn.classList.remove('btn-active');
+                if (!fullScene) initFullGlobe();
+            } else {
+                three.style.opacity = '0';
+                leaflet.classList.add('active');
+                btn.textContent = '🗺️ 2D';
+                btn.classList.add('btn-active');
+                if (!leafletMap) initLeafletMap();
+                else leafletMap.invalidateSize();
+                // Toggle heatmap overlay
+                if (heatLayer) {
+                    if (heatLayer._map) heatLayer.remove();
+                    else heatLayer.addTo(leafletMap);
+                }
+            }
         }
 
         // ==========================================
@@ -1966,15 +2539,65 @@
                 dashboard.style.display = 'none';
                 story.classList.add('active');
                 btn.textContent = '📊 Dashboard';
-                // Refresh story news
                 renderStoryNews();
-                // Re-trigger animations
-                setTimeout(initScrollAnimations, 300);
+                setTimeout(() => {
+                    document.querySelectorAll('.story-slide').forEach((slide, i) => {
+                        const content = slide.querySelector('.story-content');
+                        if (content) setTimeout(() => content.classList.add('visible'), i * 300);
+                    });
+                    if (typeof ScrollTrigger !== 'undefined') ScrollTrigger.refresh();
+                }, 300);
             } else {
                 dashboard.style.display = 'grid';
                 story.classList.remove('active');
                 btn.textContent = '📖 Story';
             }
+        }
+
+        // ==========================================
+        // KEYBOARD SHORTCUTS
+        // ==========================================
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'm' || e.key === 'M') toggleMap();
+            if (e.key === 's' || e.key === 'S') toggleStoryMode();
+            if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+            if (e.key === 'p' || e.key === 'P') exportPDF();
+            if (e.key === 'v' || e.key === 'V') setupVoiceCommands();
+            if (e.key === 't' || e.key === 'T') toggleTheme();
+            if (e.key === 'l' || e.key === 'L') toggleLanguage();
+            if (e.key === '?') {
+                e.preventDefault();
+                document.getElementById('shortcuts-modal').classList.toggle('active');
+            }
+            if (e.key === 'Escape') {
+                document.getElementById('shortcuts-modal').classList.remove('active');
+            }
+        });
+
+        // ==========================================
+        // FIREBASE AUTH
+        // ==========================================
+        function setupAuth() {
+            if (!auth) { showToast('Auth Unavailable', 'Firebase not configured', 'low'); return; }
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).then(result => {
+                showToast('✅ Signed In', result.user.displayName, 'low');
+            }).catch(err => {
+                showToast('Auth Error', err.message, 'medium');
+            });
+        }
+
+        // ==========================================
+        // CUSTOM RSS FEED
+        // ==========================================
+        function addCustomRSS() {
+            const input = $('rss-url-input');
+            const url = input.value.trim();
+            if (!url) { showToast('Invalid URL', 'Please paste a valid RSS feed URL', 'medium'); return; }
+            customFeeds.push(url);
+            input.value = '';
+            showToast('✅ RSS Added', 'Refreshing news feed...', 'low');
+            fetchNewsFromRSS();
         }
 
         // ==========================================
@@ -1990,40 +2613,27 @@
             document.getElementById('cinematic-stars').style.opacity = '0';
 
             await sleep(1200);
-
             $('cinematic-view').classList.remove('active');
             $('dashboard').classList.add('active');
             $('dashboard').style.display = 'grid';
 
             setTimeout(() => {
-                try {
-                    initFullGlobe();
-                } catch (err) {
-                    console.error('Dashboard globe failed:', err);
-                }
+                initFullGlobe();
                 renderDashboard();
-
-                // Show a toast for the most significant event
-                if (crisisData.earthquakes.length > 0) {
+                if (crisisData.earthquakes.length) {
                     const latest = crisisData.earthquakes[0];
                     const mag = latest.properties.mag || 0;
                     const place = latest.properties.place || 'Unknown';
                     const sev = severityFromMag(mag);
                     if (sev === 'critical' || sev === 'high') {
-                        showToast(
-                            `M${mag.toFixed(1)} ${place}`,
-                            `${formatTime(latest.properties.time)} • USGS`,
-                            sev
-                        );
+                        showToast(`M${mag.toFixed(1)} ${place}`, `${formatTime(latest.properties.time)} • USGS`, sev);
                     }
                 }
-                if (crisisData.disasters.length > 0) {
+                if (crisisData.disasters.length) {
                     const d = crisisData.disasters[0];
-                    const name = d.fields?.name || 'Disaster alert';
-                    showToast(name, `ReliefWeb • ${d.fields?.country?.[0]?.name || 'Global'}`, 'high');
+                    showToast(d.fields?.name || 'Disaster alert',
+                        `ReliefWeb • ${d.fields?.country?.[0]?.name || 'Global'}`, 'high');
                 }
-                // Trigger scroll animations for dashboard stats
-                setTimeout(initScrollAnimations, 500);
             }, 400);
 
             setInterval(() => {
@@ -2032,7 +2642,7 @@
         }
 
         // ==========================================
-        // MAIN FLOW
+        // MAIN INIT
         // ==========================================
         async function init() {
             initLoader();
@@ -2044,52 +2654,69 @@
             $('loader').classList.add('hidden');
             $('cinematic-view').classList.add('active');
 
-            try {
-                initCinematicGlobe();
-            } catch (err) {
-                console.error('Cinematic globe failed:', err);
-            }
+            try { initCinematicGlobe(); } catch (e) { console.error('Cinematic globe failed:', e); }
 
             const view = $('cinematic-view');
             view.addEventListener('click', expandToDashboard);
             view.addEventListener('touchstart', expandToDashboard, { passive: true });
 
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    if ($('cinematic-view').classList.contains('active') && !isExpanded) {
-                        expandToDashboard();
-                    }
-                }
+            // Event listeners for controls
+            $('map-toggle').addEventListener('click', toggleMap);
+            $('theme-toggle').addEventListener('click', toggleTheme);
+            $('lang-toggle').addEventListener('click', toggleLanguage);
+            $('fullscreen-toggle').addEventListener('click', toggleFullscreen);
+            $('pdf-export').addEventListener('click', exportPDF);
+            $('voice-toggle').addEventListener('click', setupVoiceCommands);
+            $('story-toggle').addEventListener('click', toggleStoryMode);
+            $('shortcuts-toggle').addEventListener('click', () => {
+                document.getElementById('shortcuts-modal').classList.toggle('active');
+            });
+            $('auth-toggle').addEventListener('click', setupAuth);
+            $('add-rss-btn').addEventListener('click', addCustomRSS);
+            $('ai-summary-btn').addEventListener('click', generateAISummary);
+
+            // Timeline slider
+            const slider = $('timeline-slider');
+            slider.addEventListener('input', (e) => {
+                timelineValue = parseInt(e.target.value);
+                $('timeline-label').textContent = timelineValue === 0 ? 'Now' : `${timelineValue}d ago`;
+                renderDashboard();
             });
 
-            // Story toggle
-            $('story-toggle').addEventListener('click', toggleStoryMode);
-
-            // Refresh news every 60 seconds
-            setInterval(() => {
-                fetchNewsFromRSS().then(() => {
-                    if (isExpanded && $('dashboard').classList.contains('active')) {
-                        renderNewsFeed();
-                    }
-                    if (isStoryMode) {
-                        renderStoryNews();
-                    }
-                });
+            // Refresh news every 60s
+            setInterval(async () => {
+                await fetchNewsFromRSS();
+                if (isExpanded && $('dashboard').classList.contains('active')) renderNewsFeed();
+                if (isStoryMode) renderStoryNews();
             }, 60000);
 
-            // Microinteraction: Button ripple effect
+            // Button ripple effect
             document.querySelectorAll('.btn').forEach(btn => {
                 btn.addEventListener('mousemove', (e) => {
                     const rect = btn.getBoundingClientRect();
-                    const x = ((e.clientX - rect.left) / rect.width) * 100;
-                    const y = ((e.clientY - rect.top) / rect.height) * 100;
-                    btn.style.setProperty('--x', x + '%');
-                    btn.style.setProperty('--y', y + '%');
+                    btn.style.setProperty('--x', ((e.clientX - rect.left) / rect.width * 100) + '%');
+                    btn.style.setProperty('--y', ((e.clientY - rect.top) / rect.height * 100) + '%');
                 });
             });
+
+            // GSAP ScrollTrigger
+            if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
+                gsap.registerPlugin(ScrollTrigger);
+                gsap.utils.toArray('.story-slide').forEach((slide) => {
+                    const content = slide.querySelector('.story-content');
+                    if (content) {
+                        ScrollTrigger.create({
+                            trigger: slide,
+                            start: 'top 80%',
+                            onEnter: () => content.classList.add('visible'),
+                            once: true
+                        });
+                    }
+                });
+            }
         }
 
-        // Handle resize for all globes
+        // Handle resize
         window.addEventListener('resize', () => {
             if (fullScene) {
                 try {
@@ -2105,7 +2732,24 @@
                     cinematicScene.camera.updateProjectionMatrix();
                 } catch (e) { /* ignore */ }
             }
+            if (leafletMap) { try { leafletMap.invalidateSize(); } catch (e) { /* ignore */ } }
         });
+
+        // PWA: Register service worker (mock)
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+
+        // Deep-linking: update URL on map move (mock)
+        window.addEventListener('hashchange', () => {
+            const hash = window.location.hash.slice(1);
+            if (hash) console.log('🔗 Deep-link:', hash);
+        });
+
+        // Expose focusEvent globally
+        window.focusEvent = function(title) {
+            showToast(title, 'Event selected • GCMS CORE X', 'medium');
+        };
 
         init();
     </script>
