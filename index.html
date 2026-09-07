@@ -420,11 +420,12 @@
         @media (max-width: 1024px) {
             #dashboard {
                 grid-template-columns: 1fr;
-                grid-template-rows: 60px 1fr auto;
+                grid-template-rows: 60px 55vh auto auto;
                 grid-template-areas:
                     "header"
                     "globe"
-                    "panels";
+                    "left"
+                    "right";
             }
             .sidebar-left,
             .sidebar-right {
@@ -1297,6 +1298,95 @@
             border-radius: 50%;
         }
 
+        /* ── NEWS DETAIL, FILTERS & MODALS ── */
+        .modal-close {
+            position: absolute;
+            top: 0.7rem;
+            right: 0.7rem;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.75rem;
+            line-height: 1;
+            transition: all 0.25s;
+            z-index: 2;
+        }
+        .modal-close:hover { color: var(--critical); border-color: var(--critical); }
+        .modal-wide { max-width: 640px; }
+        .panel-actions { display: flex; gap: 0.35rem; align-items: center; }
+        .panel-actions .btn { padding: 0.15rem 0.5rem; font-size: 0.55rem; }
+        #news-chips { display: flex; gap: 0.3rem; flex-wrap: wrap; padding: 0 0.3rem 0.5rem; }
+        .cat-chip {
+            padding: 0.15rem 0.55rem;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text-secondary);
+            font-size: 0.5rem;
+            font-family: 'Space Grotesk', sans-serif;
+            cursor: pointer;
+            letter-spacing: 0.05em;
+            transition: all 0.2s;
+        }
+        .cat-chip:hover { border-color: var(--accent); color: var(--accent); }
+        .cat-chip.active { background: rgba(129, 140, 248, 0.18); border-color: var(--accent); color: var(--accent); }
+        .cat-tag {
+            font-size: 0.45rem;
+            padding: 0.05rem 0.35rem;
+            border-radius: 4px;
+            background: rgba(129, 140, 248, 0.12);
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .news-item-top { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; }
+        .news-search {
+            width: 100%;
+            padding: 0.35rem 0.7rem;
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            background: var(--glass);
+            color: var(--text-primary);
+            font-size: 0.65rem;
+            outline: none;
+            margin-bottom: 0.4rem;
+            font-family: 'Inter', sans-serif;
+        }
+        .news-search:focus { border-color: var(--accent); }
+        .news-search::placeholder { color: var(--text-muted); }
+        .tone-badge {
+            font-size: 0.5rem;
+            padding: 0.15rem 0.5rem;
+            border-radius: 20px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        .tone-badge.neg { background: rgba(239, 68, 68, 0.15); color: var(--critical); }
+        .tone-badge.pos { background: rgba(74, 222, 128, 0.15); color: var(--low); }
+        .tone-badge.neu { background: rgba(251, 191, 36, 0.15); color: var(--medium); }
+        #nd-image img { width: 100%; border-radius: 10px; margin-bottom: 0.8rem; max-height: 220px; object-fit: cover; }
+        #nd-body { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.6; max-height: 38vh; overflow-y: auto; }
+        #nd-body p { margin-bottom: 0.6rem; }
+        .nd-hint { color: var(--text-muted); font-size: 0.65rem; }
+        .ed-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--glass-border);
+            font-size: 0.7rem;
+        }
+        .ed-row b { color: var(--text-primary); font-weight: 600; flex-shrink: 0; }
+        .ed-row span { color: var(--text-secondary); text-align: right; word-break: break-word; }
+        .news-item.skeleton { animation: shimmer 1.2s ease-in-out infinite; pointer-events: none; }
+        @keyframes shimmer { 0% { opacity: 0.35; } 50% { opacity: 0.75; } 100% { opacity: 0.35; } }
+
         /* Crisis Score */
         .crisis-score {
             font-family: 'Orbitron', sans-serif;
@@ -1308,6 +1398,7 @@
             background-clip: text;
         }
     </style>
+<base target="_blank">
 </head>
 <body>
 
@@ -1425,7 +1516,14 @@
             </div>
 
             <div class="glass-panel" style="padding: 0.8rem; flex: 1;">
-                <div class="panel-title">Crisis News <span style="font-size:0.45rem;color:var(--text-muted);font-weight:400;">⚡ live</span></div>
+                <div class="panel-title">Crisis News
+                    <span class="panel-actions">
+                        <span style="font-size:0.45rem;color:var(--text-muted);font-weight:400;">⚡ live</span>
+                        <button class="btn" id="news-refresh-btn" title="Refresh news">⟳</button>
+                    </span>
+                </div>
+                <div id="news-chips"></div>
+                <input type="text" class="news-search" placeholder="Search world headlines…" oninput="newsSearch=this.value;renderNewsFeed();" />
                 <div class="news-feed" id="news-feed"></div>
             </div>
 
@@ -1504,6 +1602,32 @@
         </div>
     </div>
 
+    <!-- NEWS DETAIL MODAL -->
+    <div class="modal-overlay" id="news-detail-modal" onclick="if(event.target===this)this.classList.remove('active')">
+        <div class="modal-content modal-wide" style="position:relative;">
+            <button class="modal-close" onclick="document.getElementById('news-detail-modal').classList.remove('active')">✕</button>
+            <div id="nd-image"></div>
+            <div id="nd-badges" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem;"></div>
+            <h2 id="nd-title" style="color:var(--text-primary);font-size:1rem;line-height:1.5;margin-bottom:.2rem;"></h2>
+            <div id="nd-meta" style="font-size:.6rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace;margin:.4rem 0 .8rem;"></div>
+            <div id="nd-body"></div>
+            <div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap;">
+                <button class="btn btn-primary" id="nd-load-btn">📄 Load full article</button>
+                <a class="btn" id="nd-open-link" href="#" target="_blank">Open source ↗</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- EVENT DETAIL MODAL -->
+    <div class="modal-overlay" id="event-detail-modal" onclick="if(event.target===this)this.classList.remove('active')">
+        <div class="modal-content" style="position:relative;">
+            <button class="modal-close" onclick="document.getElementById('event-detail-modal').classList.remove('active')">✕</button>
+            <h2 id="ed-title" style="color:var(--text-primary);font-size:.95rem;line-height:1.5;"></h2>
+            <div id="ed-country" style="font-size:.7rem;color:var(--accent);margin:.3rem 0 .8rem;font-family:'JetBrains Mono',monospace;"></div>
+            <div id="ed-body"></div>
+        </div>
+    </div>
+
     <!-- TOAST CONTAINER -->
     <div id="toast-container"></div>
 
@@ -1548,6 +1672,9 @@
         let timelineValue = 7;
         let customFeeds = [];
         let crisisScore = 0;
+        let gdeltConflicts = [];
+        let newsFilter = 'All';
+        let newsSearch = '';
 
         // ==========================================
         // UTILITIES
@@ -1572,6 +1699,10 @@
             if (mag >= 5.5) return 'high';
             if (mag >= 4.5) return 'medium';
             return 'low';
+        }
+
+        function esc(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         }
 
         function getSeverityColor(sev) {
@@ -1680,7 +1811,7 @@
             try {
                 updateLoader(25, 'ReliefWeb...');
                 const res = await fetch(
-                    'https://api.reliefweb.int/v1/disasters?appname=gcms-core-x&limit=6&profile=full&preset=latest&fields[include]=name,country,date,status,type'
+                    'https://api.reliefweb.int/v1/disasters?appname=gcms-core-x&limit=6&profile=full&preset=latest&fields[include]=name,country,date,status,type,url'
                     );
                 const data = await res.json();
                 results.disasters = data.data || [];
@@ -1731,55 +1862,148 @@
         }
 
         // ==========================================
-        // NEWS FETCHER (Realtime)
+        // NEWS FETCHER (Multi-source: GDELT + Google News + RSS fallbacks)
         // ==========================================
+        function parseGDELTDate(s) {
+            if (!s || s.length < 8) return new Date();
+            const y = +s.slice(0, 4), mo = +s.slice(4, 6) - 1, d = +s.slice(6, 8);
+            const h = s.length >= 10 ? +s.slice(8, 10) : 0, mi = s.length >= 12 ? +s.slice(10, 12) : 0;
+            return new Date(Date.UTC(y, mo, d, h, mi));
+        }
+
+        function categorize(title) {
+            const t = (title || '').toLowerCase();
+            if (/(earthquake|flood|hurricane|typhoon|cyclone|wildfire|wild fire|tsunami|volcano|landslide|tornado|drought|monsoon|avalanche)/.test(t)) return 'Disaster';
+            if (/(war|conflict|missile|strike|troops|ceasefire|bomb|attack|militar|invasion|clash|airstrike|artillery|hostage|shelling)/.test(t)) return 'Conflict';
+            if (/(covid|coronavirus|virus|outbreak|vaccine|hospital|disease|ebola|mpox|malaria|cholera)/.test(t)) return 'Health';
+            if (/(climate|warming|emissions|renewable|heatwave|heat wave|glacier|carbon|sea level)/.test(t)) return 'Climate';
+            if (/(election|president|parliament|sanction|minister|diplomat|summit|nato|united nations|\bvote\b|protest)/.test(t)) return 'Politics';
+            if (/(market|economy|inflation|trade|oil price|stock|recession|bank|currency)/.test(t)) return 'Economy';
+            return 'World';
+        }
+
+        const FALLBACK_NEWS = [
+            { title: 'UN warns of rising global humanitarian needs as crises multiply across regions', source: 'UN News', link: 'https://news.un.org/en/', category: 'World' },
+            { title: 'Red Cross appeals for emergency funding amid surge in climate disasters', source: 'IFRC', link: 'https://www.ifrc.org/', category: 'Disaster' },
+            { title: 'Calls for ceasefire intensify as fighting continues in active conflict zones', source: 'ReliefWeb', link: 'https://reliefweb.int/', category: 'Conflict' },
+            { title: 'WHO monitors emerging health threats and outbreak risks worldwide', source: 'WHO', link: 'https://www.who.int/', category: 'Health' },
+            { title: 'Climate extremes displace record numbers of people, aid agencies report', source: 'UNHCR', link: 'https://www.unhcr.org/', category: 'Climate' }
+        ].map(a => ({ ...a, time: new Date(), image: null, tone: null, language: 'en' }));
+
         async function fetchNewsFromRSS() {
-            const urls = [
-                'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',
-                ...customFeeds
-            ];
+            const feedEl = $('news-feed');
+            if (feedEl && newsArticles.length === 0) {
+                feedEl.innerHTML = Array(3).fill(
+                    '<div class="news-item skeleton"><div class="news-source">&nbsp;</div><div class="news-title">&nbsp;</div></div>'
+                ).join('');
+            }
+
             let allArticles = [];
 
-            for (const url of urls) {
+            // ── Source 1: GDELT DOC 2.0 — rich metadata (domain, tone, language, image) ──
+            const gdeltQueries = [
+                '(conflict OR war OR airstrike OR ceasefire OR missile) sourcelang:english',
+                '(earthquake OR flood OR hurricane OR wildfire OR tsunami) sourcelang:english',
+                '(humanitarian OR displacement OR refugee OR aid OR crisis) sourcelang:english'
+            ];
+            for (const q of gdeltQueries) {
                 try {
-                    const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
-                    const res = await fetch(proxyUrl);
+                    const url = 'https://api.gdeltproject.org/api/v2/doc/doc?query=' + encodeURIComponent(q) +
+                        '&mode=artlist&maxrecords=35&timespan=1d&sort=hybridrel&format=json';
+                    const res = await fetch(url);
                     if (res.ok) {
                         const data = await res.json();
-                        if (data.status === 'ok' && data.items.length) {
-                            const items = data.items.map(item => ({
-                                title: item.title,
-                                source: item.source || item.author || 'RSS',
-                                time: new Date(item.pubDate),
-                                link: item.link
-                            }));
-                            allArticles = allArticles.concat(items);
-                        }
+                        (data.articles || []).forEach(a => {
+                            if (!a.title || !a.url) return;
+                            allArticles.push({
+                                title: a.title,
+                                source: a.domain || 'GDELT',
+                                time: parseGDELTDate(a.seendate),
+                                link: a.url,
+                                image: a.socialimage || null,
+                                tone: a.tone != null ? parseFloat(a.tone) : null,
+                                language: a.language || 'en',
+                                category: categorize(a.title)
+                            });
+                        });
                     }
-                } catch (e) { console.warn('RSS fetch error:', url); }
+                } catch (e) { console.warn('GDELT doc query failed:', q); }
             }
 
-            // Fallback
+            // ── Source 2: Google News RSS via allorigins CORS proxy ──
+            const rssUrls = ['https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en', ...customFeeds];
+            for (const feedUrl of rssUrls) {
+                try {
+                    const proxy = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(feedUrl);
+                    const res = await fetch(proxy);
+                    if (!res.ok) continue;
+                    const xmlText = await res.text();
+                    const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+                    if (doc.querySelector('parsererror')) continue;
+                    doc.querySelectorAll('item').forEach(item => {
+                        const t = item.querySelector('title')?.textContent || '';
+                        if (!t || t.length < 12) return;
+                        const srcEl = item.querySelector('source');
+                        allArticles.push({
+                            title: t,
+                            source: srcEl ? srcEl.textContent : 'Google News',
+                            time: new Date(item.querySelector('pubDate')?.textContent || Date.now()),
+                            link: item.querySelector('link')?.textContent || '#',
+                            image: null, tone: null, language: 'en',
+                            category: categorize(t)
+                        });
+                    });
+                } catch (e) { console.warn('RSS via allorigins failed:', feedUrl); }
+            }
+
+            // ── Source 3: rss2json fallback for custom feeds ──
+            if (allArticles.length < 8) {
+                for (const feedUrl of customFeeds) {
+                    try {
+                        const proxyUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`;
+                        const res = await fetch(proxyUrl);
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.status === 'ok') {
+                                (data.items || []).forEach(item => {
+                                    allArticles.push({
+                                        title: item.title,
+                                        source: item.source || item.author || 'RSS',
+                                        time: new Date(item.pubDate),
+                                        link: item.link,
+                                        image: null, tone: null, language: 'en',
+                                        category: categorize(item.title)
+                                    });
+                                });
+                            }
+                        }
+                    } catch (e) { console.warn('rss2json fallback failed'); }
+                }
+            }
+
+            // ── Fallback: curated crisis brief so the app never renders empty ──
             if (allArticles.length === 0) {
-                allArticles = [
-                    { title: 'Global crisis updates available', source: 'System', time: new Date() },
-                    { title: 'Earthquake monitoring active', source: 'USGS', time: new Date() }
-                ];
+                allArticles = FALLBACK_NEWS.slice();
+                if (isExpanded) showToast('📡 News Fallback', 'Live feeds unreachable — showing curated crisis brief.', 'medium');
             }
 
-            // Deduplicate and sort
+            // Dedupe + sort newest first
             const seen = new Set();
-            newsArticles = allArticles.filter(a => {
-                const key = a.title.substring(0, 40);
-                if (seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            }).slice(0, 10);
+            newsArticles = allArticles
+                .filter(a => a.title && a.title.length > 12 && !a.title.toLowerCase().includes('advertisement'))
+                .filter(a => {
+                    const k = a.title.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 50);
+                    if (seen.has(k)) return false;
+                    seen.add(k);
+                    return true;
+                })
+                .sort((a, b) => new Date(b.time) - new Date(a.time))
+                .slice(0, 30);
 
+            console.log('📰 News articles loaded:', newsArticles.length);
             if (isExpanded) {
                 renderNewsFeed();
                 renderStoryNews();
-                generateAISummary();
             }
         }
 
@@ -1841,7 +2065,10 @@
                     'https://api.gdeltproject.org/api/v2/geo/geo?query=conflict&format=GeoJSON&timespan=1d');
                 if (res.ok) {
                     const data = await res.json();
-                    console.log('🌍 GDELT conflicts:', data.features?.length || 0);
+                    gdeltConflicts = (data.features || [])
+                        .filter(f => f.geometry && f.geometry.coordinates && f.geometry.coordinates.length >= 2)
+                        .slice(0, 40);
+                    console.log('🌍 GDELT conflicts:', gdeltConflicts.length);
                 }
             } catch (e) { console.warn('GDELT failed'); }
         }
@@ -1860,12 +2087,18 @@
         function generateAISummary() {
             const container = $('ai-summary-text');
             if (!container) return;
-            const headlines = newsArticles.slice(0, 5).map(a => a.title).join('. ');
-            if (headlines.length < 10) {
+            if (!newsArticles.length) {
                 container.textContent = '📡 No news data available for summary.';
                 return;
             }
-            container.textContent = `📊 Crisis Brief: ${headlines}`;
+            const counts = {};
+            newsArticles.forEach(a => { const c = a.category || 'World'; counts[c] = (counts[c] || 0) + 1; });
+            const top = Object.entries(counts).sort((x, y) => y[1] - x[1])[0];
+            const critEq = crisisData.earthquakes.filter(e => severityFromMag(e.properties.mag || 0) === 'critical').length;
+            const topHeadlines = newsArticles.slice(0, 3).map(a => '• ' + a.title).join('  ');
+            container.textContent =
+                `🧠 BRIEF — ${newsArticles.length} stories analyzed. Dominant theme: ${top ? top[0] : '—'} (${top ? top[1] : 0} stories). ` +
+                `${critEq} critical seismic event(s) in the last 24h.  ${topHeadlines}`;
         }
 
         // ==========================================
@@ -2107,6 +2340,12 @@
                     size = 0.05; }
                 points.push({ lat, lon, color, size });
             });
+            // GDELT conflict zones (purple)
+            gdeltConflicts.forEach(f => {
+                const c = f.geometry.coordinates;
+                if (!c || c.length < 2) return;
+                points.push({ lat: c[1], lon: c[0], color: '#a855f7', size: 0.035 });
+            });
             globe.addMarkers(points);
         }
 
@@ -2168,6 +2407,14 @@
                 });
             });
 
+            // GDELT conflict markers (purple)
+            gdeltConflicts.forEach(f => {
+                const c = f.geometry.coordinates;
+                L.circleMarker([c[1], c[0]], {
+                    radius: 5, fillColor: '#a855f7', color: '#e9d5ff', weight: 1, fillOpacity: 0.85
+                }).bindPopup(`<b>${esc(f.properties?.name || 'Conflict zone')}</b><br>Source: GDELT`).addTo(leafletMap);
+            });
+
             // Heatmap layer
             const heatPoints = crisisData.earthquakes.slice(0, 50).map(eq => {
                 const coords = eq.geometry.coordinates;
@@ -2187,6 +2434,7 @@
             const events = [];
 
             crisisData.earthquakes.slice(0, 8).forEach(eq => {
+                const coords = eq.geometry.coordinates || [];
                 events.push({
                     title: eq.properties.place || 'Unknown',
                     type: 'Earthquake',
@@ -2194,7 +2442,11 @@
                     region: eq.properties.place || 'Unknown',
                     time: eq.properties.time || Date.now(),
                     source: 'USGS',
-                    mag: eq.properties.mag || 0
+                    mag: eq.properties.mag || 0,
+                    depth: coords.length > 2 ? Math.round(coords[2]) : null,
+                    lat: coords[1] ?? null,
+                    lon: coords[0] ?? null,
+                    url: eq.properties.url || null
                 });
             });
 
@@ -2205,8 +2457,9 @@
                     type: f.type?.[0]?.name || 'Crisis',
                     severity: 'high',
                     region: f.country?.[0]?.name || 'Global',
-                    time: f.date?.created || Date.now(),
-                    source: 'ReliefWeb'
+                    time: f.date?.created ? new Date(f.date.created) : Date.now(),
+                    source: 'ReliefWeb',
+                    url: f.url || null
                 });
             });
 
@@ -2216,7 +2469,7 @@
                 return daysAgo <= timelineValue;
             });
 
-            const activeCount = filtered.length + crisisData.disasters.length;
+            const activeCount = filtered.length;
             const alertCount = filtered.filter(e => e.severity === 'critical' || e.severity === 'high').length;
 
             $('stat-active').textContent = activeCount;
@@ -2227,9 +2480,10 @@
 
             calculateCrisisScore();
 
+            window.currentEvents = events;
             const eventList = $('event-list');
             eventList.innerHTML = filtered.slice(0, 6).map(e => `
-                    <div class="event-item ${e.severity}" onclick="focusEvent('${e.title.replace(/'/g, "\\'")}')">
+                    <div class="event-item ${e.severity}" onclick="showEventDetail(${events.indexOf(e)})">
                         <div class="event-header">
                             <div class="event-title">${e.title}</div>
                             <span class="event-severity severity-badge-${e.severity}">${e.severity}</span>
@@ -2244,7 +2498,7 @@
 
             const alerts = filtered.filter(e => e.severity === 'critical' || e.severity === 'high');
             $('alert-list').innerHTML = alerts.slice(0, 5).map(e => `
-                    <div class="event-item ${e.severity}">
+                    <div class="event-item ${e.severity}" onclick="showEventDetail(${alerts.indexOf(e)})">
                         <div class="event-header">
                             <div class="event-title">${e.title}</div>
                             <span class="event-severity severity-badge-${e.severity}">${e.severity}</span>
@@ -2278,19 +2532,50 @@
             }
         }
 
+        function getFilteredNews() {
+            const q = (newsSearch || '').toLowerCase();
+            const out = [];
+            newsArticles.forEach((a, i) => {
+                if (newsFilter !== 'All' && (a.category || 'World') !== newsFilter) return;
+                if (q && !a.title.toLowerCase().includes(q)) return;
+                out.push({ a, i });
+            });
+            return out;
+        }
+
+        function setNewsFilter(c) {
+            newsFilter = c;
+            renderNewsFeed();
+        }
+
         function renderNewsFeed() {
             const feed = $('news-feed');
             if (!feed) return;
+            const chipsWrap = $('news-chips');
+            if (chipsWrap) {
+                const cats = ['All', 'Conflict', 'Disaster', 'Health', 'Climate', 'Politics', 'Economy', 'World']
+                    .filter(c => c === 'All' || newsArticles.some(a => (a.category || 'World') === c));
+                chipsWrap.innerHTML = cats.map(c =>
+                    `<button class="cat-chip ${newsFilter === c ? 'active' : ''}" onclick="setNewsFilter('${c}')">${c}</button>`
+                ).join('');
+            }
             if (newsArticles.length === 0) {
-                feed.innerHTML =
-                    `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading news...</div><div class="news-time">Just now</div></div>`;
+                feed.innerHTML = `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading world news…</div></div>`;
                 return;
             }
-            feed.innerHTML = newsArticles.slice(0, 5).map(n => `
-                    <div class="news-item" onclick="window.open('${n.link || '#'}', '_blank')">
-                        <div class="news-source">${n.source}</div>
-                        <div class="news-title">${n.title}</div>
-                        <div class="news-time">${timeAgo(n.time)}</div>
+            const items = getFilteredNews().slice(0, 10);
+            if (!items.length) {
+                feed.innerHTML = `<div class="news-item"><div class="news-source">Filter</div><div class="news-title">No stories match your filter</div></div>`;
+                return;
+            }
+            feed.innerHTML = items.map(({ a, i }) => `
+                    <div class="news-item" onclick="showNewsDetail(${i})">
+                        <div class="news-item-top">
+                            <span class="news-source">${esc(a.source)}</span>
+                            <span class="cat-tag">${a.category || 'World'}</span>
+                        </div>
+                        <div class="news-title">${esc(a.title)}</div>
+                        <div class="news-time">${timeAgo(a.time)}</div>
                     </div>
                 `).join('');
         }
@@ -2299,17 +2584,99 @@
             const feed = $('story-news-feed');
             if (!feed) return;
             if (newsArticles.length === 0) {
-                feed.innerHTML =
-                    `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading...</div></div>`;
+                feed.innerHTML = `<div class="news-item"><div class="news-source">System</div><div class="news-title">Loading…</div></div>`;
                 return;
             }
-            feed.innerHTML = newsArticles.slice(0, 4).map(n => `
-                    <div class="news-item" onclick="window.open('${n.link || '#'}', '_blank')">
-                        <div class="news-source">${n.source}</div>
-                        <div class="news-title">${n.title}</div>
+            feed.innerHTML = newsArticles.slice(0, 4).map((n, i) => `
+                    <div class="news-item" onclick="showNewsDetail(${i})">
+                        <div class="news-item-top">
+                            <span class="news-source">${esc(n.source)}</span>
+                            <span class="cat-tag">${n.category || 'World'}</span>
+                        </div>
+                        <div class="news-title">${esc(n.title)}</div>
                         <div class="news-time">${timeAgo(n.time)}</div>
                     </div>
                 `).join('');
+        }
+
+        // ── NEWS DETAIL MODAL ──
+        function showNewsDetail(i) {
+            const a = newsArticles[i];
+            if (!a) return;
+            $('nd-image').innerHTML = a.image
+                ? `<img src="${a.image}" alt="" onerror="this.parentElement.style.display='none'">` : '';
+            $('nd-badges').innerHTML =
+                `<span class="cat-tag" style="font-size:.55rem;padding:.15rem .5rem;">${a.category || 'World'}</span>` +
+                (a.tone != null
+                    ? `<span class="tone-badge ${a.tone < -3 ? 'neg' : a.tone > 3 ? 'pos' : 'neu'}">Tone ${a.tone.toFixed(1)}</span>`
+                    : '') +
+                (a.language ? `<span class="tone-badge neu">${String(a.language).toUpperCase()}</span>` : '');
+            $('nd-title').textContent = a.title;
+            $('nd-meta').textContent = `${a.source} • ${formatTime(a.time)} • ${timeAgo(a.time)}`;
+            $('nd-body').innerHTML = `
+                    <p style="font-weight:600;color:var(--text-primary);">${esc(a.title)}</p>
+                    <p class="nd-hint">Press "Load full article" to auto-fetch the complete story. Some publishers block external readers — if blocked, use "Open source".</p>
+                `;
+            $('nd-load-btn').onclick = () => loadArticleFull(a);
+            $('nd-open-link').href = a.link || '#';
+            $('news-detail-modal').classList.add('active');
+        }
+
+        async function loadArticleFull(a) {
+            const body = $('nd-body');
+            const btn = $('nd-load-btn');
+            btn.textContent = '⏳ Loading…';
+            btn.disabled = true;
+            body.innerHTML = '<p class="nd-hint">Fetching full article…</p>';
+            try {
+                const res = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(a.link));
+                if (!res.ok) throw new Error('fetch failed');
+                const html = await res.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                doc.querySelectorAll('script,style,nav,header,footer,aside,form,iframe,svg,noscript').forEach(n => n.remove());
+                const ps = [...doc.querySelectorAll('p')]
+                    .map(p => p.textContent.trim())
+                    .filter(t => t.length > 80)
+                    .slice(0, 14);
+                if (!ps.length) throw new Error('no paragraphs');
+                body.innerHTML = ps.map(p => `<p>${esc(p)}</p>`).join('') +
+                    `<p class="nd-hint">— Excerpt truncated. Read the complete story at ${esc(a.source)}.</p>`;
+            } catch (e) {
+                body.innerHTML = `
+                    <p class="nd-hint">⚠️ Couldn't auto-load the full text — the publisher likely blocks external readers.</p>
+                    <p><a class="btn btn-primary" href="${a.link}" target="_blank">Read on ${esc(a.source)} ↗</a></p>`;
+            }
+            btn.textContent = '📄 Load full article';
+            btn.disabled = false;
+        }
+
+        // ── EVENT DETAIL MODAL ──
+        async function showEventDetail(i) {
+            const e = (window.currentEvents || [])[i];
+            if (!e) return;
+            $('ed-title').textContent = e.title;
+            const rows = [
+                ['Type', e.type],
+                ['Severity', (e.severity || '').toUpperCase()],
+                e.mag != null ? ['Magnitude', 'M' + Number(e.mag).toFixed(1)] : null,
+                e.depth != null ? ['Depth', e.depth + ' km'] : null,
+                ['Region', e.region],
+                ['Reported (UTC)', formatTime(e.time)],
+                ['Status', timeAgo(e.time)],
+                ['Source', e.source]
+            ].filter(Boolean);
+            $('ed-body').innerHTML = rows.map(r => `<div class="ed-row"><b>${r[0]}</b><span>${esc(r[1])}</span></div>`).join('') +
+                (e.url ? `<a class="btn btn-primary" style="margin-top:.8rem;" href="${e.url}" target="_blank">Open ${esc(e.source)} report ↗</a>` : '');
+            $('ed-country').textContent = '';
+            $('event-detail-modal').classList.add('active');
+            if (e.lat != null && e.lon != null) {
+                try {
+                    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${e.lat}&lon=${e.lon}&format=json`);
+                    const data = await res.json();
+                    const c = data.address?.country;
+                    if (c) $('ed-country').textContent = `📍 ${c}`;
+                } catch (err) { /* ignore */ }
+            }
         }
 
         function initTrendChart() {
@@ -2674,6 +3041,13 @@
             $('auth-toggle').addEventListener('click', setupAuth);
             $('add-rss-btn').addEventListener('click', addCustomRSS);
             $('ai-summary-btn').addEventListener('click', generateAISummary);
+            $('news-refresh-btn').addEventListener('click', async () => {
+                showToast('⟳ Refreshing', 'Pulling the latest world news…', 'low');
+                await fetchNewsFromRSS();
+                renderNewsFeed();
+                renderStoryNews();
+                generateAISummary();
+            });
 
             // Timeline slider
             const slider = $('timeline-slider');
