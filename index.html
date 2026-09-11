@@ -652,6 +652,7 @@ body{
       <span id="clock" style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--text-muted)">--:--:-- UTC</span>
       <button class="btn" id="map-toggle" type="button" aria-pressed="true" title="Toggle 3D / 2D map">🌍 3D</button>
       <button class="btn btn-icon-only" id="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle dark or light theme">🌓</button>
+      <button class="btn btn-icon-only" id="density-toggle" type="button" title="Toggle list density" aria-label="Toggle list density">🗜️</button>
       <button class="btn btn-icon-only" id="fullscreen-toggle" type="button" title="Fullscreen" aria-label="Toggle fullscreen">⛶</button>
       <button class="btn btn-icon-only" id="pdf-export" type="button" title="Export PDF report" aria-label="Export PDF report">📄</button>
       <button class="btn btn-icon-only" id="voice-toggle" type="button" title="Voice commands" aria-label="Start voice commands">🎤</button>
@@ -1808,12 +1809,28 @@ function eventItemHtml(event, index) {
   </button>`;
 }
 
+function highlightText(text, query) {
+  if (!query) return esc(text);
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')})`, 'gi');
+  return esc(text).replace(regex, '<mark style="background:var(--accent);color:#000;padding:0 2px;border-radius:2px">$1</mark>');
+}
+
+let isCompact = false;
+function toggleDensity() {
+  isCompact = !isCompact;
+  document.querySelectorAll('.list').forEach(l => l.classList.toggle('compact', isCompact));
+  const btn = $('density-toggle');
+  if (btn) btn.style.color = isCompact ? 'var(--accent)' : '';
+}
+
 function newsItemHtml(article, index) {
+  const q = state.newsSearch ? state.newsSearch.trim() : '';
+  const highlightedTitle = highlightText(article.title, q);
   return `<button class="item" type="button" data-news-index="${index}">
     ${thumbHtml(article)}
     <span class="item-main">
       <span class="item-top">
-        <span class="item-title">${esc(article.title)}</span>
+        <span class="item-title">${highlightedTitle}</span>
         <span class="badge-cat">${esc(article.category)}</span>
       </span>
       <span class="item-meta">
@@ -2371,6 +2388,25 @@ async function initCesium() {
       }
     }, C.ScreenSpaceEventType.LEFT_CLICK);
 
+    const tooltip = document.createElement('div');
+    tooltip.className = 'cesium-tooltip';
+    container.appendChild(tooltip);
+    handler.setInputAction((movement) => {
+      const picked = scene.pick(movement.endPosition);
+      if (C.defined(picked) && picked.id) {
+        const id = typeof picked.id.id === 'string' ? picked.id.id : null;
+        const ev = visibleEvents().find((e) => e.id === id);
+        if (ev) {
+          tooltip.style.display = 'block';
+          tooltip.style.left = movement.endPosition.x + 15 + 'px';
+          tooltip.style.top = movement.endPosition.y + 15 + 'px';
+          tooltip.innerHTML = `<div style="font-weight:700;font-size:12px">${esc(ev.title)}</div><div style="font-size:10px;color:var(--text-muted);margin-top:2px">${esc(ev.severity).toUpperCase()} · ${Math.round(ev.confidence*100)}% Conf</div>`;
+        }
+      } else {
+        tooltip.style.display = 'none';
+      }
+    }, C.ScreenSpaceEventType.MOUSE_MOVE);
+
     if (statusEl) statusEl.textContent = '3D globe · live';
     syncMapEntities();
 
@@ -2405,10 +2441,22 @@ function syncMapEntities() {
         color,
         outlineColor: C.Color.WHITE.withAlpha(0.85),
         outlineWidth: 1.5,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
         scaleByDistance: new C.NearFarScalar(1.5e6, 1.4, 2.0e7, 0.5)
       }
     });
+
+    if (ev.severity === 'critical' || ev.severity === 'high') {
+      cesiumViewer.entities.add({
+        position: C.Cartesian3.fromDegrees(ev.lon, ev.lat),
+        ellipse: {
+          semiMinorAxis: ev.severity === 'critical' ? 70000 : 40000,
+          semiMajorAxis: ev.severity === 'critical' ? 70000 : 40000,
+          material: color.withAlpha(0.25),
+          outline: true,
+          outlineColor: color.withAlpha(0.65)
+        }
+      });
+    }
   }
 }
 
@@ -3016,6 +3064,7 @@ async function init() {
 function wireControls() {
   $('map-toggle')?.addEventListener('click', toggleMapMode);
   $('theme-toggle')?.addEventListener('click', toggleTheme);
+  $('density-toggle')?.addEventListener('click', toggleDensity);
   $('fullscreen-toggle')?.addEventListener('click', toggleFullscreen);
   $('pdf-export')?.addEventListener('click', exportPdf);
   $('voice-toggle')?.addEventListener('click', startVoiceCommands);
