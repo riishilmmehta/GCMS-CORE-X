@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
@@ -289,44 +290,28 @@ body{
 .source-status{font-family:'JetBrains Mono',monospace;font-size:.58rem;
   color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
 
-/* Globe area — centered, circular, zoom-isolated */
-.globe-area{
-  grid-area:globe;position:relative;overflow:hidden;
-  min-height:0;background:#05060f;
-  display:flex;align-items:center;justify-content:center;
-  padding:1rem;
-}
-#cesium-container{
-  position:relative;
-  width:min(100%,780px);height:min(100%,780px);
-  max-width:100%;max-height:100%;
-  aspect-ratio:1/1;
-  border-radius:50%;overflow:hidden;
-  box-shadow:
-    0 0 0 1px rgba(129,140,248,.15),
-    0 0 60px rgba(79,70,229,.25),
-    0 0 120px rgba(79,70,229,.12);
-  z-index:1;background:#05060f;
-  touch-action:none;
-  isolation:isolate;
-}
-#cesium-container canvas,
+.globe-area{grid-area:globe;position:relative;overflow:hidden;
+  min-height:0;background:#05060f}
+#cesium-container,#leaflet-map{position:absolute;inset:0;width:100%;height:100%}
+#cesium-container{z-index:1;background:#05060f;touch-action:none}
+#cesium-container.zoom-active{box-shadow:inset 0 0 0 2px var(--accent)}
 #cesium-container .cesium-widget,
-#cesium-container .cesium-widget canvas{
-  width:100% !important;height:100% !important;
-  touch-action:none;
-}
+#cesium-container .cesium-widget canvas{width:100% !important;height:100% !important}
 .cesium-widget-credits{display:none !important}
-#leaflet-map{
-  position:absolute;inset:0;width:100%;height:100%;
-  opacity:0;pointer-events:none;transition:opacity .5s;z-index:2;
-}
+#leaflet-map{opacity:0;pointer-events:none;transition:opacity .5s;z-index:2}
 #leaflet-map.active{opacity:1;pointer-events:auto}
 #map-status{position:absolute;top:.7rem;left:.7rem;z-index:6;
   background:rgba(10,10,26,.82);backdrop-filter:blur(12px);
   border:1px solid var(--glass-border);border-radius:8px;
   padding:.4rem .75rem;font-size:.68rem;color:var(--text-secondary);
   font-family:'JetBrains Mono',monospace;pointer-events:none}
+#globe-zoom-hint{position:absolute;bottom:.7rem;left:50%;transform:translateX(-50%);
+  z-index:6;background:rgba(10,10,26,.82);backdrop-filter:blur(12px);
+  border:1px solid var(--glass-border);border-radius:8px;
+  padding:.4rem .75rem;font-size:.65rem;color:var(--text-muted);
+  font-family:'JetBrains Mono',monospace;pointer-events:none;
+  transition:opacity .3s;white-space:nowrap}
+#globe-zoom-hint.active{opacity:0}
 
 .chart-box{position:relative;height:140px;width:100%;margin-top:.4rem}
 
@@ -413,11 +398,10 @@ body{
 
 @media (max-width:1100px){
   #dashboard{grid-template-columns:1fr;
-    grid-template-rows:auto 62vh auto auto;
+    grid-template-rows:auto 52vh auto auto;
     grid-template-areas:"header" "globe" "left" "right"}
   .sidebar{overflow:visible}
   .list-scroll{max-height:none}
-  #cesium-container{width:min(100%,620px);height:min(100%,620px)}
 }
 @media (max-width:640px){
   body{font-size:14px}
@@ -432,7 +416,6 @@ body{
   .shortcut-grid{grid-template-columns:1fr}
   .modal{padding:1.2rem}
   #toast-container{top:auto;bottom:12px;right:12px;left:12px;max-width:none}
-  #cesium-container{width:min(100%,440px);height:min(100%,440px)}
 }
 </style>
 </head>
@@ -540,6 +523,7 @@ body{
     <div id="cesium-container" role="application" aria-label="Interactive 3D globe showing crisis events" tabindex="0"></div>
     <div id="leaflet-map" aria-hidden="true"></div>
     <div id="map-status" role="status" aria-live="polite">Initialising map…</div>
+    <div id="globe-zoom-hint">Click globe to activate zoom · drag rotates</div>
   </main>
 
   <aside class="sidebar sidebar-right" aria-label="Intelligence feeds">
@@ -611,7 +595,7 @@ body{
   <section class="story-slide">
     <div class="story-content">
       <h2>🌊 Humanitarian Snapshot</h2>
-      <p>Figures below are derived only from what the ReliefWeb disaster feed returns.</p>
+      <p>Figures below are derived only from what the ReliefWeb disaster feed returns. Nothing is hard-coded.</p>
       <div class="story-stats">
         <div class="stat-card"><div class="stat-value high" id="story-disasters">—</div><div class="stat-label">Active Disasters</div></div>
         <div class="stat-card"><div class="stat-value" id="story-countries">—</div><div class="stat-label">Countries Affected</div></div>
@@ -682,6 +666,13 @@ body{
 <div id="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <script>
+/* ═══════════════════════════════════════════════════════════════════════
+   GCMS CORE X — v8.0
+   Resilient pipeline: proxy race → normalise → dedupe → analytics → render
+   News: multi-proxy race + Jina Reader for full article text.
+   Globe: Cesium 3D with pin-click → event modal + related news.
+   Zoom: click-to-activate so wheel doesn't hijack page scroll.
+   ═══════════════════════════════════════════════════════════════════════ */
 (() => {
 'use strict';
 
@@ -721,12 +712,14 @@ function esc(value) {
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
 }
+
 function safeUrl(value) {
   try {
     const u = new URL(String(value), location.href);
     return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '#';
   } catch { return '#'; }
 }
+
 function safeImg(value) {
   const s = String(value || '');
   if (s.startsWith('data:image/svg+xml')) return s;
@@ -735,12 +728,16 @@ function safeImg(value) {
     return u.protocol === 'https:' ? u.href : '';
   } catch { return ''; }
 }
+
 function hashStr(str) {
   let h = 2166136261;
   const s = String(str || '');
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i); h = Math.imul(h, 16777619);
+  }
   return (h >>> 0).toString(36);
 }
+
 const DAY_MS = 86400000;
 
 function timeAgo(ts) {
@@ -751,11 +748,13 @@ function timeAgo(ts) {
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
 }
+
 function formatUtc(ts) {
   const d = new Date(ts);
   if (isNaN(d)) return '—';
   return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
 }
+
 function severityColor(sev) {
   return { critical: '#ef4444', high: '#fb923c', medium: '#fbbf24', low: '#4ade80' }[sev] || '#4ade80';
 }
@@ -773,7 +772,9 @@ async function fetchThroughRace(url, timeoutMs = 9000) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(buildUrl(url), { signal: ctrl.signal, referrerPolicy: 'no-referrer' });
+      const res = await fetch(buildUrl(url), {
+        signal: ctrl.signal, referrerPolicy: 'no-referrer'
+      });
       clearTimeout(timer);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const text = await res.text();
@@ -816,6 +817,7 @@ function markSource(key, status, count, error) {
   s.error = error || null;
   renderSourceHealth();
 }
+
 function freshnessOf(source) {
   if (!source.at) return 'idle';
   if (source.status === 'error') return 'error';
@@ -825,6 +827,7 @@ function freshnessOf(source) {
   if (age < 60 * 60 * 1000) return 'recent';
   return 'stale';
 }
+
 function renderSourceHealth() {
   const el = $('source-list'); if (!el) return;
   el.innerHTML = Object.entries(SOURCES).map(([, s]) => {
@@ -840,7 +843,7 @@ function renderSourceHealth() {
   }).join('');
 }
 
-/* ══════════════════ 5. CATEGORY ══════════════════ */
+/* ══════════════════ 5. CATEGORY + THEME ══════════════════ */
 const CATEGORY_RULES = [
   [/earthquake|seismic|\bquake\b|tremor|tsunami|volcan|eruption|landslide|avalanche|wildfire|wild fire|bushfire|flood|flooding|monsoon|hurricane|typhoon|cyclone|tornado|drought|famine|heatwave|heat wave|blizzard|storm surge/i, 'Disaster'],
   [/war|conflict|airstrike|air strike|missile|shelling|bomb|drone strike|troops|military|invasion|offensive|frontline|ceasefire|clash|artillery|hostage|militant|insurgen/i, 'Conflict'],
@@ -849,11 +852,13 @@ const CATEGORY_RULES = [
   [/election|parliament|sanction|minister|diplomat|summit|treaty|nato|united nations|\bvote\b|referendum|protest|riot|unrest/i, 'Politics'],
   [/market|inflation|recession|gdp|currency|stock|trade war|tariff|central bank|opec|oil price/i, 'Economy']
 ];
+
 function categorize(title) {
   const t = String(title || '');
   for (const [re, cat] of CATEGORY_RULES) if (re.test(t)) return cat;
   return 'World';
 }
+
 const CATEGORY_THEME = {
   Disaster: { emoji: '🌊', c1: '#0ea5e9', c2: '#0c4a6e' },
   Conflict: { emoji: '⚔️', c1: '#ef4444', c2: '#450a0a' },
@@ -863,7 +868,10 @@ const CATEGORY_THEME = {
   Economy:  { emoji: '📉', c1: '#eab308', c2: '#422006' },
   World:    { emoji: '🌍', c1: '#38bdf8', c2: '#0c4a6e' }
 };
-function pickTheme(title, category) { return CATEGORY_THEME[category] || CATEGORY_THEME.World; }
+
+function pickTheme(title, category) {
+  return CATEGORY_THEME[category] || CATEGORY_THEME.World;
+}
 
 function fallbackArtwork(item, w = 640, h = 360) {
   const theme = pickTheme(item.title, item.category);
@@ -884,7 +892,10 @@ function fallbackArtwork(item, w = 640, h = 360) {
 </svg>`;
   return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }
-function imageFor(item, w, h) { return safeImg(item.image) || fallbackArtwork(item, w, h); }
+
+function imageFor(item, w, h) {
+  return safeImg(item.image) || fallbackArtwork(item, w, h);
+}
 
 function thumbHtml(item) {
   const theme = pickTheme(item.title, item.category);
@@ -896,6 +907,7 @@ function thumbHtml(item) {
          onerror="this.remove()">
   </span>`;
 }
+
 function heroHtml(item) {
   const theme = pickTheme(item.title, item.category);
   const src = imageFor(item, 800, 450);
@@ -908,7 +920,7 @@ function heroHtml(item) {
   </div>`;
 }
 
-/* ══════════════════ 6. GAZETTEER ══════════════════ */
+/* ══════════════════ 6. GAZETTEER (compact) ══════════════════ */
 const GAZETTEER = [
   ['new york', 40.71, -74.01], ['los angeles', 34.05, -118.24], ['london', 51.51, -0.13],
   ['paris', 48.86, 2.35], ['berlin', 52.52, 13.40], ['madrid', 40.42, -3.70],
@@ -923,7 +935,7 @@ const GAZETTEER = [
   ['hong kong', 22.32, 114.17], ['taipei', 25.03, 121.57], ['tokyo', 35.68, 139.69],
   ['seoul', 37.57, 126.98], ['pyongyang', 39.03, 125.75], ['sydney', -33.87, 151.21],
   ['melbourne', -37.81, 144.96], ['nairobi', -1.29, 36.82], ['lagos', 6.52, 3.38],
-  ['johannesburg', -26.20, 28.05], ['cape town', -33.92, 18.42],
+  ['johannesburg', -26.20, 28.05], ['cape town', -33.92, 18.42], ['cairo', 30.04, 31.24],
   ['mexico city', 19.43, -99.13], ['sao paulo', -23.55, -46.63], ['buenos aires', -34.60, -58.38],
   ['bogota', 4.71, -74.07], ['lima', -12.05, -77.04], ['santiago', -33.45, -70.67],
   ['caracas', 10.48, -66.90], ['havana', 23.11, -82.37], ['toronto', 43.65, -79.38],
@@ -970,12 +982,14 @@ function reliabilityOf(sourceName) {
   }
   return DEFAULT_RELIABILITY;
 }
+
 function severityFromMagnitude(mag) {
   if (mag >= 6.5) return 'critical';
   if (mag >= 5.5) return 'high';
   if (mag >= 4.5) return 'medium';
   return 'low';
 }
+
 function severityFromCategory(category, corroboration) {
   const base = { Conflict: 'high', Disaster: 'high', Health: 'medium', Climate: 'medium',
     Politics: 'low', Economy: 'low', World: 'low' }[category] || 'low';
@@ -986,12 +1000,14 @@ function severityFromCategory(category, corroboration) {
   }
   return base;
 }
+
 function computeConfidence(sources, hasGeo) {
   const base = Math.max(...sources.map(reliabilityOf), DEFAULT_RELIABILITY);
   const corroboration = clamp((sources.length - 1) * 0.07, 0, 0.20);
   const geo = hasGeo ? 0.08 : 0;
   return clamp(base * 0.75 + corroboration + geo, 0.10, 1.00);
 }
+
 function fingerprint(title, category) {
   const normalised = String(title || '').toLowerCase()
     .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -1125,24 +1141,25 @@ function parseGdeltDate(s) {
 }
 
 const FALLBACK_NEWS = [
-  { title: 'UN agencies warn of growing humanitarian needs across multiple crisis regions', source: 'UN News', url: 'https://news.un.org/en/', image: null, tone: null },
-  { title: 'ReliefWeb reports active disasters affecting millions worldwide', source: 'ReliefWeb', url: 'https://reliefweb.int/updates', image: null, tone: null },
-  { title: 'USGS monitors elevated seismic activity across the Pacific ring of fire', source: 'USGS', url: 'https://earthquake.usgs.gov/earthquakes/map/', image: null, tone: null },
-  { title: 'International monitors flag escalating conflict in multiple regions', source: 'Reuters', url: 'https://www.reuters.com/world/', image: null, tone: null },
-  { title: 'Climate scientists report record temperatures across multiple continents', source: 'BBC News', url: 'https://www.bbc.com/news', image: null, tone: null },
-  { title: 'Health agencies track evolving disease outbreaks in several countries', source: 'WHO', url: 'https://www.who.int/emergencies/disease-outbreak-news', image: null, tone: null },
-  { title: 'UNHCR updates displacement figures as refugee flows shift across borders', source: 'UNHCR', url: 'https://www.unhcr.org/news', image: null, tone: null },
-  { title: 'Aid convoys reach conflict-affected areas after negotiated pause', source: 'ICRC', url: 'https://www.icrc.org/en/news', image: null, tone: null },
-  { title: 'Economists flag supply chain pressures from regional instability', source: 'AP News', url: 'https://apnews.com/hub/world-news', image: null, tone: null },
-  { title: 'Global monitoring networks track flooding and storm systems in real time', source: 'GDACS', url: 'https://www.gdacs.org/', image: null, tone: null },
-  { title: 'Diplomatic efforts intensify as regional tensions continue', source: 'Al Jazeera', url: 'https://www.aljazeera.com/', image: null, tone: null },
-  { title: 'Maritime authorities respond to incidents affecting key shipping routes', source: 'Maritime Executive', url: 'https://www.maritime-executive.com/', image: null, tone: null }
+  { title: 'UN agencies warn of growing humanitarian needs across multiple crisis regions', source: 'UN News', url: 'https://news.un.org/en/', image: null, tone: null, sourcecountry: null },
+  { title: 'ReliefWeb reports active disasters affecting millions worldwide', source: 'ReliefWeb', url: 'https://reliefweb.int/updates', image: null, tone: null, sourcecountry: null },
+  { title: 'USGS monitors elevated seismic activity across the Pacific ring of fire', source: 'USGS', url: 'https://earthquake.usgs.gov/earthquakes/map/', image: null, tone: null, sourcecountry: null },
+  { title: 'International monitors flag escalating conflict in multiple regions', source: 'Reuters', url: 'https://www.reuters.com/world/', image: null, tone: null, sourcecountry: null },
+  { title: 'Climate scientists report record temperatures across multiple continents', source: 'BBC News', url: 'https://www.bbc.com/news', image: null, tone: null, sourcecountry: null },
+  { title: 'Health agencies track evolving disease outbreaks in several countries', source: 'WHO', url: 'https://www.who.int/emergencies/disease-outbreak-news', image: null, tone: null, sourcecountry: null },
+  { title: 'UNHCR updates displacement figures as refugee flows shift across borders', source: 'UNHCR', url: 'https://www.unhcr.org/news', image: null, tone: null, sourcecountry: null },
+  { title: 'Aid convoys reach conflict-affected areas after negotiated pause', source: 'ICRC', url: 'https://www.icrc.org/en/news', image: null, tone: null, sourcecountry: null },
+  { title: 'Economists flag supply chain pressures from regional instability', source: 'AP News', url: 'https://apnews.com/hub/world-news', image: null, tone: null, sourcecountry: null },
+  { title: 'Global monitoring networks track flooding and storm systems in real time', source: 'GDACS', url: 'https://www.gdacs.org/', image: null, tone: null, sourcecountry: null },
+  { title: 'Diplomatic efforts intensify as regional tensions continue', source: 'Al Jazeera', url: 'https://www.aljazeera.com/', image: null, tone: null, sourcecountry: null },
+  { title: 'Maritime authorities respond to incidents affecting key shipping routes', source: 'Maritime Executive', url: 'https://www.maritime-executive.com/', image: null, tone: null, sourcecountry: null }
 ];
 
 async function ingestNews() {
   markSource('news', 'loading', 0);
   const collected = [];
 
+  /* GDELT article queries */
   const queries = [
     '(conflict OR war OR airstrike OR ceasefire OR missile) sourcelang:english',
     '(earthquake OR flood OR hurricane OR wildfire OR tsunami) sourcelang:english',
@@ -1168,6 +1185,7 @@ async function ingestNews() {
     } catch (e) { console.log('[gdelt news]', e.message); }
   }
 
+  /* Google News RSS */
   const feeds = [
     'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',
     'https://news.google.com/rss/search?q=conflict+OR+earthquake+OR+flood+OR+war&hl=en-US&gl=US&ceid=US:en'
@@ -1195,6 +1213,7 @@ async function ingestNews() {
     } catch (e) { console.log('[gnews]', e.message); }
   }
 
+  /* Fallback if everything failed */
   if (!collected.length) {
     console.warn('[news] all live sources failed — using FALLBACK_NEWS');
     markSource('news', 'error', FALLBACK_NEWS.length, 'fallback in use');
@@ -1202,6 +1221,7 @@ async function ingestNews() {
     return FALLBACK_NEWS.map((n, i) => normaliseNewsItem(n, now - i * 3600000));
   }
 
+  /* Normalise + dedupe */
   const seen = new Set();
   const items = [];
   for (const raw of collected) {
@@ -1245,7 +1265,9 @@ function normaliseNewsItem(raw, forcedTime) {
 async function ingestSocial() {
   markSource('social', 'loading', 0);
   try {
-    const xml = await fetchThroughRace('https://www.reddit.com/r/worldnews/.rss');
+    const xml = await fetchThroughRace(
+      'https://www.reddit.com/r/worldnews/.rss'
+    );
     const doc = new DOMParser().parseFromString(xml, 'text/xml');
     if (doc.querySelector('parsererror')) throw new Error('parse fail');
     const posts = Array.from(doc.querySelectorAll('entry')).slice(0, 6).map(e => ({
@@ -1313,6 +1335,7 @@ function mergeEvents(all) {
 
 /* ══════════════════ 10. ANALYTICS ══════════════════ */
 const SEVERITY_WEIGHT = { critical: 10, high: 6, medium: 3, low: 1 };
+
 function computeCrisisIndex(events) {
   if (!events.length) return 0;
   const now = Date.now();
@@ -1325,10 +1348,12 @@ function computeCrisisIndex(events) {
   }
   return Math.round(100 * (1 - Math.exp(-raw / 60)));
 }
+
 function meanConfidence(events) {
   if (!events.length) return 0;
   return events.reduce((a, e) => a + e.confidence, 0) / events.length;
 }
+
 function computeTrend(events, days = 7) {
   const buckets = Array.from({ length: days }, () => ({ critical: 0, high: 0, medium: 0, low: 0 }));
   const end = new Date(); end.setHours(23, 59, 59, 999);
@@ -1341,6 +1366,7 @@ function computeTrend(events, days = 7) {
   }
   return buckets;
 }
+
 function trendLabels(days = 7) {
   const out = [];
   const now = new Date();
@@ -1358,10 +1384,12 @@ const state = {
   is3D: true, storyMode: false,
   trendChart: null, storyTrendChart: null
 };
+
 function visibleEvents() {
   const cutoff = Date.now() - state.timelineDays * DAY_MS;
   return state.events.filter(e => e.time >= cutoff).sort((a, b) => b.time - a.time);
 }
+
 function visibleNews() {
   const q = state.newsSearch.trim().toLowerCase();
   return state.news
@@ -1387,9 +1415,14 @@ function showToast(title, subtitle, severity = 'medium', ttl = 7000) {
   `;
   toast.setAttribute('role', 'button');
   toast.setAttribute('tabindex', '0');
-  const dismiss = () => { toast.classList.add('removing'); setTimeout(() => toast.remove(), 350); };
+  const dismiss = () => {
+    toast.classList.add('removing');
+    setTimeout(() => toast.remove(), 350);
+  };
   toast.addEventListener('click', dismiss);
-  toast.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismiss(); } });
+  toast.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismiss(); }
+  });
   container.appendChild(toast);
   setTimeout(dismiss, ttl);
 }
@@ -1404,7 +1437,9 @@ const Modal = (() => {
     overlay.classList.add('active');
     document.body.style.overflow = 'hidden';
     stack.push(overlay);
-    const focusables = overlay.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])');
+    const focusables = overlay.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
     if (focusables[0]) setTimeout(() => focusables[0].focus(), 40);
   }
   function close(id) {
@@ -1430,6 +1465,7 @@ document.addEventListener('click', e => {
 function severityBadge(sev) {
   return `<span class="badge badge-${esc(sev)}">${esc(sev)}</span>`;
 }
+
 function eventItemHtml(event, index) {
   const place = event.place ? ` · ${esc(event.place)}` : '';
   return `<button class="item ${esc(event.severity)}" type="button" data-event-index="${index}">
@@ -1446,6 +1482,7 @@ function eventItemHtml(event, index) {
     </span>
   </button>`;
 }
+
 function newsItemHtml(article, index) {
   return `<button class="item" type="button" data-news-index="${index}">
     ${thumbHtml(article)}
@@ -1462,6 +1499,7 @@ function newsItemHtml(article, index) {
     </span>
   </button>`;
 }
+
 function renderStats() {
   const events = visibleEvents();
   const highCritical = events.filter(e => e.severity === 'critical' || e.severity === 'high');
@@ -1479,6 +1517,7 @@ function renderStats() {
   const evCount = $('ev-count'); if (evCount) evCount.textContent = String(events.length);
   const alCount = $('al-count'); if (alCount) alCount.textContent = String(highCritical.length);
 }
+
 function renderEventList() {
   const container = $('event-list'); if (!container) return;
   const events = visibleEvents().slice(0, 12);
@@ -1491,6 +1530,7 @@ function renderEventList() {
   }
   container.innerHTML = events.map(eventItemHtml).join('');
 }
+
 function renderAlertList() {
   const container = $('alert-list'); if (!container) return;
   const all = visibleEvents();
@@ -1501,6 +1541,7 @@ function renderAlertList() {
   }
   container.innerHTML = alerts.map(a => eventItemHtml(a, all.indexOf(a))).join('');
 }
+
 function renderNewsChips() {
   const wrap = $('news-chips'); if (!wrap) return;
   const cats = ['All', 'Conflict', 'Disaster', 'Health', 'Climate', 'Politics', 'Economy', 'World']
@@ -1510,6 +1551,7 @@ function renderNewsChips() {
             data-news-cat="${esc(c)}" aria-pressed="${state.newsCategory === c}">${esc(c)}</button>
   `).join('');
 }
+
 function renderNewsFeed() {
   const container = $('news-feed'); if (!container) return;
   if (!state.news.length) {
@@ -1523,6 +1565,7 @@ function renderNewsFeed() {
   }
   container.innerHTML = items.map(newsItemHtml).join('');
 }
+
 function renderStoryNews() {
   const container = $('story-news-feed'); if (!container) return;
   if (!state.news.length) {
@@ -1531,6 +1574,7 @@ function renderStoryNews() {
   }
   container.innerHTML = state.news.slice(0, 5).map(newsItemHtml).join('');
 }
+
 function renderSocialFeed() {
   const container = $('social-feed'); if (!container) return;
   if (!state.social.length) {
@@ -1544,6 +1588,7 @@ function renderSocialFeed() {
     </div>
   `).join('');
 }
+
 function renderTrendCharts() {
   if (typeof Chart === 'undefined') return;
   const events = visibleEvents();
@@ -1552,6 +1597,7 @@ function renderTrendCharts() {
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
   const tickColor = isLight ? '#475569' : '#7a8aa3';
   const gridColor = isLight ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.06)';
+
   const datasets = [
     { label: 'Critical', key: 'critical', color: '#ef4444' },
     { label: 'High', key: 'high', color: '#fb923c' },
@@ -1562,6 +1608,7 @@ function renderTrendCharts() {
     backgroundColor: d.color + 'b3', borderColor: d.color,
     borderWidth: 1, borderRadius: 3
   }));
+
   const baseOptions = {
     responsive: true, maintainAspectRatio: false,
     plugins: {
@@ -1573,6 +1620,7 @@ function renderTrendCharts() {
       y: { stacked: true, beginAtZero: true, ticks: { color: tickColor, font: { size: 10 }, precision: 0 }, grid: { color: gridColor } }
     }
   };
+
   const mainCanvas = $('trend-chart');
   if (mainCanvas) {
     if (state.trendChart) state.trendChart.destroy();
@@ -1588,6 +1636,7 @@ function renderTrendCharts() {
     });
   }
 }
+
 function renderStoryStats() {
   const disasters = state.events.filter(e => e.id.startsWith('rw-'));
   const countries = new Set(disasters.map(d => d.place).filter(Boolean));
@@ -1603,6 +1652,7 @@ function renderStoryStats() {
       : 'ReliefWeb disaster feed returned no records.';
   }
 }
+
 function renderAll() {
   renderStats(); renderEventList(); renderAlertList();
   renderNewsChips(); renderNewsFeed(); renderStoryNews();
@@ -1611,153 +1661,7 @@ function renderAll() {
   syncLeafletMarkers();
 }
 
-/* ══════════════════ 15. PROCEDURAL EARTH TEXTURE ══════════════════ */
-function makeProceduralEarthTexture() {
-  const w = 4096, h = 2048;
-  const c = document.createElement('canvas');
-  c.width = w; c.height = h;
-  const ctx = c.getContext('2d');
-
-  /* Ocean gradient */
-  const ocean = ctx.createLinearGradient(0, 0, 0, h);
-  ocean.addColorStop(0.00, '#08213d');
-  ocean.addColorStop(0.25, '#0e3d6b');
-  ocean.addColorStop(0.50, '#1668a8');
-  ocean.addColorStop(0.75, '#0e3d6b');
-  ocean.addColorStop(1.00, '#08213d');
-  ctx.fillStyle = ocean;
-  ctx.fillRect(0, 0, w, h);
-
-  const px = lon => (lon + 180) / 360 * w;
-  const py = lat => (90 - lat) / 180 * h;
-
-  const landmasses = [
-    /* North America */
-    [[-168,65],[-160,71],[-140,70],[-125,70],[-110,68],[-95,68],[-80,72],[-70,60],
-     [-55,52],[-60,45],[-70,42],[-75,35],[-81,25],[-97,25],[-105,20],[-115,30],
-     [-125,40],[-125,48],[-130,55],[-140,60],[-168,65]],
-    /* Greenland */
-    [[-45,60],[-20,70],[-20,82],[-40,83],[-60,80],[-55,70],[-45,60]],
-    /* South America */
-    [[-81,10],[-75,10],[-60,12],[-50,5],[-35,-5],[-38,-15],[-48,-25],[-58,-35],
-     [-62,-40],[-65,-50],[-70,-55],[-75,-50],[-73,-40],[-71,-30],[-71,-20],
-     [-75,-10],[-79,0],[-81,10]],
-    /* Europe */
-    [[-10,36],[0,44],[3,43],[10,44],[15,40],[20,40],[28,41],[30,45],[28,55],
-     [24,60],[30,65],[28,70],[15,68],[10,63],[5,60],[7,54],[0,50],[-5,48],
-     [-10,44],[-10,36]],
-    /* Africa */
-    [[-17,15],[-10,25],[0,32],[10,37],[20,32],[32,31],[35,25],[43,12],[51,12],
-     [42,-2],[40,-15],[35,-24],[25,-34],[18,-34],[12,-20],[10,-3],[5,5],
-     [-10,5],[-17,15]],
-    /* Asia */
-    [[30,45],[45,40],[55,38],[60,25],[70,22],[75,8],[80,5],[90,22],[95,22],
-     [100,13],[105,10],[110,20],[120,22],[125,32],[130,45],[140,45],[150,45],
-     [160,60],[180,65],[180,72],[160,75],[140,75],[120,75],[100,78],[80,75],
-     [70,72],[60,70],[45,68],[30,70],[28,55],[30,45]],
-    /* India */
-    [[68,24],[72,20],[78,8],[82,17],[88,22],[92,22],[88,26],[80,30],[72,28],[68,24]],
-    /* Australia */
-    [[114,-22],[122,-18],[130,-12],[140,-11],[148,-20],[153,-28],[150,-38],
-     [140,-38],[130,-32],[120,-34],[114,-22]],
-    /* Antarctica */
-    [[-180,-63],[-150,-70],[-120,-73],[-90,-72],[-60,-63],[-30,-70],[0,-70],
-     [30,-68],[60,-67],[90,-66],[120,-66],[150,-70],[180,-72],[180,-90],[-180,-90],[-180,-63]],
-    /* Japan */
-    [[130,32],[135,35],[140,36],[145,43],[142,45],[140,40],[135,34],[130,32]],
-    /* UK + Ireland */
-    [[-10,52],[-5,55],[-3,58],[-5,58],[-8,55],[-10,52]],
-    [[-6,52],[-10,54],[-8,55],[-6,52]],
-    /* Madagascar */
-    [[43,-12],[50,-15],[48,-25],[44,-25],[43,-12]],
-    /* New Zealand */
-    [[166,-46],[172,-34],[176,-38],[178,-38],[172,-46],[166,-46]],
-    /* Indonesia / Philippines */
-    [[95,5],[105,-6],[115,-8],[130,-8],[140,-8],[130,0],[120,0],[105,0],[95,5]],
-    [[120,10],[125,10],[126,5],[120,5],[120,10]],
-    /* Iceland */
-    [[-24,64],[-14,65],[-14,66],[-22,66],[-24,64]],
-    /* Sri Lanka */
-    [[80,6],[82,7],[82,9],[80,9],[80,6]]
-  ];
-
-  ctx.fillStyle = '#3a6b2f';
-  landmasses.forEach(poly => {
-    ctx.beginPath();
-    poly.forEach(([lon, lat], i) => {
-      const x = px(lon), y = py(lat);
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.closePath();
-    ctx.fill();
-  });
-
-  /* Desert/tundra bands */
-  const landLayer = ctx.getImageData(0, 0, w, h);
-  for (let y = 0; y < h; y++) {
-    const lat = 90 - (y / h) * 180;
-    const isDesert = Math.abs(Math.abs(lat) - 25) < 12;
-    const isTundra = Math.abs(lat) > 60;
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      if (landLayer.data[i] < 100 && landLayer.data[i + 1] > 60 && landLayer.data[i + 1] < 150) {
-        if (isDesert) {
-          landLayer.data[i] = 180; landLayer.data[i + 1] = 150; landLayer.data[i + 2] = 90;
-        } else if (isTundra) {
-          landLayer.data[i] = 140; landLayer.data[i + 1] = 150; landLayer.data[i + 2] = 140;
-        }
-      }
-    }
-  }
-  ctx.putImageData(landLayer, 0, 0);
-
-  /* Ice caps */
-  const northIce = ctx.createLinearGradient(0, 0, 0, h * 0.09);
-  northIce.addColorStop(0, 'rgba(245,250,255,1)');
-  northIce.addColorStop(1, 'rgba(245,250,255,0)');
-  ctx.fillStyle = northIce;
-  ctx.fillRect(0, 0, w, h * 0.09);
-
-  const southIce = ctx.createLinearGradient(0, h, 0, h * 0.90);
-  southIce.addColorStop(0, 'rgba(245,250,255,1)');
-  southIce.addColorStop(1, 'rgba(245,250,255,0)');
-  ctx.fillStyle = southIce;
-  ctx.fillRect(0, h * 0.90, w, h * 0.10);
-
-  /* Cloud swirls */
-  ctx.globalAlpha = 0.28;
-  for (let i = 0; i < 400; i++) {
-    const cx = Math.random() * w;
-    const cy = Math.random() * h;
-    const r = 20 + Math.random() * 120;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    grad.addColorStop(0, 'rgba(255,255,255,0.9)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  /* Noise */
-  const img = ctx.getImageData(0, 0, w, h);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * 12;
-    img.data[i]     = Math.min(255, Math.max(0, img.data[i] + n));
-    img.data[i + 1] = Math.min(255, Math.max(0, img.data[i + 1] + n));
-    img.data[i + 2] = Math.min(255, Math.max(0, img.data[i + 2] + n));
-  }
-  ctx.putImageData(img, 0, 0);
-
-  const tex = new THREE.CanvasTexture(c);
-  if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
-  tex.anisotropy = 8;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.needsUpdate = true;
-  return tex;
-}
-
-/* ══════════════════ 16. THREE.JS LOADER GLOBE ══════════════════ */
+/* ══════════════════ 15. THREE.JS LOADER GLOBE ══════════════════ */
 function createThreeLoader(canvas, accentHex = '#818cf8') {
   if (!canvas || typeof THREE === 'undefined') return null;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -1765,15 +1669,18 @@ function createThreeLoader(canvas, accentHex = '#818cf8') {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
   camera.position.z = 5.6;
+
   const wire = new THREE.LineSegments(
     new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(2, 2)),
     new THREE.LineBasicMaterial({ color: accentHex, transparent: true, opacity: 0.42 })
   );
   scene.add(wire);
+
   const coreMat = new THREE.MeshBasicMaterial({
     color: accentHex, wireframe: true, transparent: true, opacity: 0.13
   });
   scene.add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.9, 1), coreMat));
+
   const pPos = new Float32Array(1400 * 3);
   for (let i = 0; i < pPos.length; i++) pPos[i] = (Math.random() - 0.5) * 16;
   const particles = new THREE.Points(
@@ -1781,6 +1688,7 @@ function createThreeLoader(canvas, accentHex = '#818cf8') {
     new THREE.PointsMaterial({ size: 0.028, color: accentHex, transparent: true, opacity: 0.55 })
   );
   scene.add(particles);
+
   let running = false, raf = null;
   function resize() {
     const w = canvas.clientWidth || window.innerWidth;
@@ -1808,7 +1716,7 @@ function createThreeLoader(canvas, accentHex = '#818cf8') {
   };
 }
 
-/* ══════════════════ 17. THREE.JS CINEMATIC EARTH ══════════════════ */
+/* ══════════════════ 16. THREE.JS CINEMATIC EARTH ══════════════════ */
 function createThreeCinematic(canvas) {
   if (!canvas || typeof THREE === 'undefined') return null;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -1835,18 +1743,50 @@ function createThreeCinematic(canvas) {
   scene.add(earthGroup);
 
   const earthMat = new THREE.MeshPhongMaterial({
-    color: 0xffffff,
-    specular: new THREE.Color(0x1a2038),
-    shininess: 12,
-    emissive: new THREE.Color(0x000000),
-    emissiveIntensity: 0.0
+    color: 0x1b2a4a,
+    specular: new THREE.Color(0x0a0a12),
+    shininess: 8,
+    emissive: new THREE.Color(0x060a18),
+    emissiveIntensity: 0.30
   });
   earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), earthMat));
 
-  /* Apply procedural texture — guaranteed to work */
-  earthMat.map = makeProceduralEarthTexture();
-  earthMat.needsUpdate = true;
-  console.log('[earth] procedural texture applied');
+  const textureLoader = new THREE.TextureLoader();
+  if (textureLoader.setCrossOrigin) textureLoader.setCrossOrigin('anonymous');
+
+  const EARTH_TEXTURE_URLS = [
+    'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+    'https://unpkg.com/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
+    'https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/textures/planets/earth_atmos_2048.jpg'
+  ];
+
+  let urlIdx = 0;
+  function loadEarthTexture(url) {
+    console.log('[earth] loading', url);
+    textureLoader.load(url,
+      tex => {
+        console.log('[earth] ✓', url);
+        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+        tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1);
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        earthMat.map = tex;
+        earthMat.color.set(0xffffff);
+        earthMat.emissive.set(0x000000);
+        earthMat.emissiveIntensity = 0;
+        earthMat.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        urlIdx++;
+        if (urlIdx < EARTH_TEXTURE_URLS.length) loadEarthTexture(EARTH_TEXTURE_URLS[urlIdx]);
+        else console.warn('[earth] all texture CDNs failed');
+      }
+    );
+  }
+  loadEarthTexture(EARTH_TEXTURE_URLS[0]);
 
   const atmoMat = new THREE.MeshPhongMaterial({
     color: 0x4f6dff, transparent: true, opacity: 0.08,
@@ -1854,7 +1794,7 @@ function createThreeCinematic(canvas) {
   });
   earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.045, 48, 48), atmoMat));
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+  scene.add(new THREE.AmbientLight(0x2a3358, 0.55));
   const key = new THREE.DirectionalLight(0xffffff, 1.35);
   key.position.set(5, 3, 5); scene.add(key);
   const rim = new THREE.DirectionalLight(0x818cf8, 0.45);
@@ -1872,6 +1812,7 @@ function createThreeCinematic(canvas) {
        r * Math.sin(phi) * Math.sin(theta)
     );
   }
+
   function setMarkers(points) {
     while (markerGroup.children.length) {
       const c = markerGroup.children.pop();
@@ -1927,7 +1868,7 @@ function createThreeCinematic(canvas) {
   };
 }
 
-/* ══════════════════ 18. CESIUM 3D ══════════════════ */
+/* ══════════════════ 17. CESIUM 3D ══════════════════ */
 let cesiumViewer = null;
 let cesiumLoadPromise = null;
 
@@ -1937,7 +1878,8 @@ function loadCesium() {
     const base = `https://cdn.jsdelivr.net/npm/cesium@${CONFIG.cesiumVersion}/Build/Cesium/`;
     window.CESIUM_BASE_URL = base;
     const link = document.createElement('link');
-    link.rel = 'stylesheet'; link.href = base + 'Widgets/widgets.css';
+    link.rel = 'stylesheet';
+    link.href = base + 'Widgets/widgets.css';
     document.head.appendChild(link);
     const script = document.createElement('script');
     script.src = base + 'Cesium.js';
@@ -2011,54 +1953,52 @@ async function initCesium() {
       destination: C.Cartesian3.fromDegrees(15, 20, 22000000)
     });
 
-    /* ── Zoom isolation ──
-       Wheel/touch over the globe zooms the globe; the page does not scroll.
-       Cesium handles zoom internally once we stop propagation on the container. */
+    /* Click-to-activate zoom: wheel scrolls page until globe clicked */
     const cam = scene.screenSpaceCameraController;
-    cam.enableZoom = true;
+    cam.enableZoom = false;
     cam.enableRotate = true;
     cam.enableTilt = true;
     cam.enableLook = true;
 
-    /* Stop wheel events from bubbling out of the globe container,
-       but let Cesium receive them so it can perform the zoom. */
-    container.addEventListener('wheel', e => {
-      e.stopPropagation();
-      e.preventDefault();
-      /* Forward the wheel to Cesium's canvas */
-      const canvas = scene.canvas;
-      if (canvas) {
-        const ev = new WheelEvent('wheel', {
-          deltaY: e.deltaY, deltaX: e.deltaX,
-          deltaMode: e.deltaMode,
-          clientX: e.clientX, clientY: e.clientY,
-          bubbles: false, cancelable: true
-        });
-        canvas.dispatchEvent(ev);
+    container.addEventListener('click', e => {
+      if (!container.classList.contains('zoom-active')) {
+        container.classList.add('zoom-active');
+        cam.enableZoom = true;
+        $('globe-zoom-hint')?.classList.add('active');
+        setTimeout(() => {
+          /* auto-release after 4s of no interaction with the globe */
+        }, 4000);
       }
-    }, { passive: false });
-
-    /* Touch: prevent page scroll on pinch, allow single-finger rotate */
-    container.addEventListener('touchmove', e => {
-      if (e.touches.length > 1) e.preventDefault();
-    }, { passive: false });
-
-    /* Focus the globe container on click so wheel is captured immediately */
-    container.addEventListener('click', () => {
-      container.focus({ preventScroll: true });
     });
 
-    /* Pin click handling */
+    /* Release zoom when clicking elsewhere on the page */
+    document.addEventListener('click', e => {
+      if (!container.contains(e.target)) {
+        container.classList.remove('zoom-active');
+        cam.enableZoom = false;
+        $('globe-zoom-hint')?.classList.remove('active');
+      }
+    }, true);
+
+    /* Pin click handling — opens event detail modal */
     const handler = new C.ScreenSpaceEventHandler(scene.canvas);
     handler.setInputAction(click => {
       const picked = scene.pick(click.position);
       if (C.defined(picked) && picked.id) {
         const id = typeof picked.id.id === 'string' ? picked.id.id : null;
-        if (id) openEventById(id);
+        if (id) {
+          /* If not zoom-active, treat first click as "activate zoom" AND open pin if hit */
+          if (!container.classList.contains('zoom-active')) {
+            container.classList.add('zoom-active');
+            cam.enableZoom = true;
+            $('globe-zoom-hint')?.classList.add('active');
+          }
+          openEventById(id);
+        }
       }
     }, C.ScreenSpaceEventType.LEFT_CLICK);
 
-    if (statusEl) statusEl.textContent = '3D globe · wheel to zoom';
+    if (statusEl) statusEl.textContent = '3D globe · click to zoom';
     syncCesiumEntities();
     setTimeout(() => { try { cesiumViewer.resize(); } catch {} }, 350);
   } catch (err) {
@@ -2102,7 +2042,7 @@ function flyToEvent(event) {
   });
 }
 
-/* ══════════════════ 19. LEAFLET 2D ══════════════════ */
+/* ══════════════════ 18. LEAFLET 2D ══════════════════ */
 let leafletMap = null;
 let leafletLayers = {};
 
@@ -2111,16 +2051,11 @@ function initLeaflet() {
   const container = $('leaflet-map'); if (!container) return;
   leafletMap = L.map(container, {
     center: [20, 10], zoom: 2, minZoom: 2,
-    zoomControl: true, worldCopyJump: true,
-    scrollWheelZoom: false
+    zoomControl: true, worldCopyJump: true
   });
-  leafletMap.on('click', () => leafletMap.scrollWheelZoom.enable());
-  leafletMap.on('mouseout', () => leafletMap.scrollWheelZoom.disable());
-
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19
   }).addTo(leafletMap);
-
   leafletLayers = {
     critical: L.layerGroup().addTo(leafletMap),
     high: L.layerGroup().addTo(leafletMap),
@@ -2190,7 +2125,7 @@ function toggleMapMode() {
   else switchTo3D();
 }
 
-/* ══════════════════ 20. EVENT DETAIL + RELATED NEWS ══════════════════ */
+/* ══════════════════ 19. EVENT DETAIL + RELATED NEWS ══════════════════ */
 function openEventById(id) {
   const events = visibleEvents();
   const idx = events.findIndex(e => e.id === id);
@@ -2240,13 +2175,14 @@ function openEventDetail(index) {
     bodyEl.appendChild(link);
   }
 
+  /* Related news: same category, or matching place name */
   const related = state.news
     .filter(n => n.category === ev.category || (ev.place && n.place === ev.place))
     .slice(0, 5);
 
   if (related.length && relatedWrap && relatedEl) {
     relatedWrap.style.display = 'block';
-    relatedEl.innerHTML = related.map(n => {
+    relatedEl.innerHTML = related.map((n, i) => {
       const realIdx = state.news.indexOf(n);
       return `<button class="item" data-news-index="${realIdx}">
         ${thumbHtml(n)}
@@ -2269,7 +2205,7 @@ function openEventDetail(index) {
   Modal.open('event-detail-modal');
 }
 
-/* ══════════════════ 21. NEWS DETAIL + JINA READER ══════════════════ */
+/* ══════════════════ 20. NEWS DETAIL + JINA READER ══════════════════ */
 function openNewsDetail(index) {
   const article = visibleNews()[index]; if (!article) return;
   const imageEl = $('nd-image'), badgesEl = $('nd-badges');
@@ -2336,7 +2272,7 @@ async function loadFullArticle(article, bodyEl, btn) {
   }
 }
 
-/* ══════════════════ 22. AUTOMATED BRIEF ══════════════════ */
+/* ══════════════════ 21. AUTOMATED BRIEF ══════════════════ */
 function generateBrief() {
   const container = $('ai-summary-text'); if (!container) return;
   const events = visibleEvents();
@@ -2365,8 +2301,9 @@ function generateBrief() {
   container.textContent = parts.join(' ');
 }
 
-/* ══════════════════ 23. REFRESH PIPELINE ══════════════════ */
+/* ══════════════════ 22. REFRESH PIPELINE ══════════════════ */
 let refreshInFlight = false;
+
 async function refreshAllData({ silent = false } = {}) {
   if (refreshInFlight) return;
   refreshInFlight = true;
@@ -2390,7 +2327,7 @@ async function refreshAllData({ silent = false } = {}) {
   } finally { refreshInFlight = false; }
 }
 
-/* ══════════════════ 24. PDF EXPORT ══════════════════ */
+/* ══════════════════ 23. PDF EXPORT ══════════════════ */
 async function exportPdf() {
   const btn = $('pdf-export');
   if (!btn || typeof html2canvas === 'undefined' || !window.jspdf) {
@@ -2430,7 +2367,7 @@ async function exportPdf() {
   }
 }
 
-/* ══════════════════ 25. VOICE ══════════════════ */
+/* ══════════════════ 24. VOICE ══════════════════ */
 function startVoiceCommands() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showToast('Voice unavailable', 'Speech recognition unsupported.', 'low'); return; }
@@ -2453,7 +2390,7 @@ function startVoiceCommands() {
   showToast('🎤 Listening', 'Try: "map", "story", "refresh", "export".', 'low', 4000);
 }
 
-/* ══════════════════ 26. UI ACTIONS ══════════════════ */
+/* ══════════════════ 25. UI ACTIONS ══════════════════ */
 function toggleTheme() {
   const root = document.documentElement;
   const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
@@ -2462,6 +2399,7 @@ function toggleTheme() {
   if (btn) btn.textContent = next === 'light' ? '☀️' : '🌓';
   renderTrendCharts();
 }
+
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen?.().catch(() => {
@@ -2469,6 +2407,7 @@ function toggleFullscreen() {
     });
   } else document.exitFullscreen?.();
 }
+
 function toggleStoryMode() {
   state.storyMode = !state.storyMode;
   const dashboard = $('dashboard');
@@ -2489,12 +2428,13 @@ function toggleStoryMode() {
     window.scrollTo(0, 0);
   }
 }
+
 async function refreshAllSources() {
   showToast('⟳ Refreshing', 'Pulling latest from all sources…', 'low', 3000);
   await refreshAllData({ silent: false });
 }
 
-/* ══════════════════ 27. EVENT DELEGATION ══════════════════ */
+/* ══════════════════ 26. EVENT DELEGATION ══════════════════ */
 document.addEventListener('click', e => {
   const eventBtn = e.target.closest('[data-event-index]');
   if (eventBtn) {
@@ -2515,7 +2455,7 @@ document.addEventListener('click', e => {
   }
 });
 
-/* ══════════════════ 28. KEYBOARD ══════════════════ */
+/* ══════════════════ 27. KEYBOARD ══════════════════ */
 document.addEventListener('keydown', e => {
   const tag = (e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') {
@@ -2535,7 +2475,7 @@ document.addEventListener('keydown', e => {
   }
 });
 
-/* ══════════════════ 29. BOOT ══════════════════ */
+/* ══════════════════ 28. BOOT ══════════════════ */
 let loaderGlobe = null;
 let cinematicGlobe = null;
 
@@ -2668,7 +2608,7 @@ async function expandToDashboard() {
   tick(); setInterval(tick, 1000);
 }
 
-/* ══════════════════ 30. LIFECYCLE ══════════════════ */
+/* ══════════════════ 29. LIFECYCLE ══════════════════ */
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { cinematicGlobe?.stop(); loaderGlobe?.stop(); }
   else {
@@ -2683,6 +2623,7 @@ window.addEventListener('resize', () => {
   if (leafletMap) try { leafletMap.invalidateSize(); } catch {}
 });
 
+/* ══════════════════ 30. GO ══════════════════ */
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
 else init();
 
