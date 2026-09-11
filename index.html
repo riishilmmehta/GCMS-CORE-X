@@ -235,11 +235,12 @@ body{
    ═══════════════════════════════════════════════════════════ */
 #dashboard{
   display:none;
-  grid-template-rows:auto 1fr;
+  grid-template-rows:auto 1fr auto;
   grid-template-columns:minmax(300px,340px) minmax(0,1fr) minmax(300px,340px);
   grid-template-areas:
     "header header header"
-    "left   globe  right";
+    "left   globe  right"
+    "ticker ticker ticker";
   gap:1px;background:var(--bg-deep);
   min-height:100vh;width:100%;
   opacity:0;transition:opacity .8s ease;
@@ -540,6 +541,29 @@ body{
 .article-body p{margin-bottom:.75rem}
 .hint-text-sm{color:var(--text-muted);font-size:.75rem;line-height:1.6}
 
+.mic-active { color: #ef4444 !important; animation: pulseRed 1.5s infinite; }
+@keyframes pulseRed { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+
+.threat-ticker {
+  grid-area: ticker;
+  background: var(--glass);
+  border-top: 1px solid var(--glass-border);
+  padding: 0.35rem 1rem;
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  min-height: 28px;
+}
+.ticker-content { display: inline-block; white-space: nowrap; animation: ticker 40s linear infinite; }
+.ticker-content:hover { animation-play-state: paused; }
+@keyframes ticker { 0% { transform: translateX(100vw); } 100% { transform: translateX(-100%); } }
+.tick-item { display: inline-block; margin-right: 3rem; }
+.tick-crit { color: var(--critical); font-weight: 700; margin-right: 4px; }
+.tick-high { color: var(--high); font-weight: 600; margin-right: 4px; }
+
 #toast-container{
   position:fixed;top:74px;right:12px;z-index:3000;
   display:flex;flex-direction:column;gap:.5rem;
@@ -754,6 +778,12 @@ body{
       <div class="chart-box"><canvas id="trend-chart" aria-label="Bar chart of event severity over the last seven days" role="img"></canvas></div>
     </section>
   </aside>
+  <!-- Threat Ticker -->
+  <div class="threat-ticker" aria-hidden="true">
+    <div class="ticker-content" id="threat-ticker">
+      <span style="color:var(--text-muted)">Awaiting telemetry...</span>
+    </div>
+  </div>
 </div>
 
 <!-- STORY MODE -->
@@ -2367,12 +2397,12 @@ async function initCesium() {
       } catch (e2) { console.warn('[GCMS] OSM fallback failed:', e2); }
     }
 
-    scene.globe.enableLighting = false;
+    scene.globe.enableLighting = true;
     scene.globe.showGroundAtmosphere = true;
     scene.globe.depthTestAgainstTerrain = false;
     if (scene.skyAtmosphere) scene.skyAtmosphere.show = true;
     if (scene.fog) scene.fog.enabled = true;
-    scene.highDynamicRange = false;
+    scene.highDynamicRange = true;
     scene.screenSpaceCameraController.minimumZoomDistance = 500000;
 
     cesiumViewer.camera.setView({
@@ -2457,6 +2487,26 @@ function syncMapEntities() {
         }
       });
     }
+
+    const isStorm = ev.category === 'meteorological' || /rain|storm|flood|hurricane|cyclone|typhoon|sandstorm|weather/i.test(ev.title);
+    if (isStorm) {
+      cesiumViewer.entities.add({
+        position: C.Cartesian3.fromDegrees(ev.lon, ev.lat, 18000),
+        ellipsoid: {
+          radii: new C.Cartesian3(90000, 90000, 15000),
+          material: C.Color.DARKSLATEGRAY.withAlpha(0.85),
+          outline: false
+        }
+      });
+      cesiumViewer.entities.add({
+        position: C.Cartesian3.fromDegrees(ev.lon, ev.lat, 12000),
+        ellipsoid: {
+          radii: new C.Cartesian3(50000, 50000, 8000),
+          material: C.Color.BLACK.withAlpha(0.7),
+          outline: false
+        }
+      });
+    }
   }
 }
 
@@ -2521,12 +2571,16 @@ function syncLeafletMarkers() {
       weight: 1, fillOpacity: 0.75
     });
 
+    const linkHtml = (ev.url && ev.url !== '#') ? 
+      `<div style="margin-top:8px"><a href="${esc(safeUrl(ev.url))}" target="_blank" rel="noopener noreferrer" style="display:inline-block;background:var(--accent);color:#000;padding:4px 8px;border-radius:4px;text-decoration:none;font-weight:600;font-size:.65rem">Open Source ↗</a></div>` : '';
+
     marker.bindPopup(
       `<div style="min-width:200px">
         <div style="font-weight:600;font-size:.8rem;line-height:1.35;margin-bottom:.35rem">${esc(ev.title)}</div>
         <div style="font-size:.65rem;color:#94a3b8;font-family:monospace">
           ${esc(ev.source)} · ${esc(ev.severity)} · ${Math.round(ev.confidence * 100)}%
         </div>
+        ${linkHtml}
       </div>`,
       { maxWidth: 260 }
     );
@@ -2694,7 +2748,7 @@ function generateBrief() {
 
   const events = visibleEvents();
   if (!events.length) {
-    container.textContent = '◌ No events in the selected window — brief unavailable.';
+    container.innerHTML = '◌ No events in the selected window — brief unavailable.';
     return;
   }
 
@@ -2713,16 +2767,32 @@ function generateBrief() {
     .map((e) => e.place);
   const uniqueHotspots = [...new Set(hotspots)];
 
-  const parts = [
-    `${events.length} events across ${state.timelineDays} day${state.timelineDays === 1 ? '' : 's'}.`,
-    `Dominant category: ${topCategory} (${topCount}).`,
-    `${critical} critical, ${high} high severity.`,
-    `Crisis Index ${index}/100 at ${confidence}% mean confidence.`
-  ];
-  if (uniqueHotspots.length) parts.push(`Hotspots: ${uniqueHotspots.join(', ')}.`);
-  parts.push('— Rule-based summary, not a language model.');
+  container.innerHTML = `
+    <ul style="margin:0;padding-left:1.2rem;list-style-type:square;line-height:1.6">
+      <li><b>${events.length}</b> events analyzed across <b>${state.timelineDays}</b> day${state.timelineDays === 1 ? '' : 's'}.</li>
+      <li>Dominant category: <b style="color:var(--accent)">${topCategory}</b> (${topCount}).</li>
+      <li>Severity: <b style="color:var(--critical)">${critical} critical</b>, <b style="color:var(--high)">${high} high</b>.</li>
+      <li>Global Crisis Index: <b>${index}/100</b> (Mean confidence: ${confidence}%).</li>
+      ${uniqueHotspots.length ? `<li>Active hotspots: <b>${uniqueHotspots.join(', ')}</b>.</li>` : ''}
+    </ul>
+    <div style="margin-top:.6rem;font-size:.68rem;color:var(--text-muted)">— Rule-based aggregation.</div>
+  `;
+}
 
-  container.textContent = parts.join(' ');
+function renderTicker() {
+  const container = $('threat-ticker');
+  if (!container) return;
+  const evs = state.events.filter(e => e.severity === 'critical' || e.severity === 'high').slice(0, 15);
+  if (!evs.length) {
+    container.innerHTML = '<span style="color:var(--text-muted)">No critical or high severity alerts at this time.</span>';
+    return;
+  }
+  container.innerHTML = evs.map(e => `
+    <span class="tick-item">
+      <span class="${e.severity === 'critical' ? 'tick-crit' : 'tick-high'}">[${e.severity.toUpperCase()}]</span>
+      ${esc(e.title)} <span style="color:var(--text-muted)">(${timeAgo(e.time)})</span>
+    </span>
+  `).join('');
 }
 
 /* ══════════════════ 21. REFRESH PIPELINE ══════════════════ */
@@ -2835,36 +2905,74 @@ async function exportPdf() {
 }
 
 /* ══════════════════ 24. VOICE ══════════════════ */
+let recognitionActive = false;
+let speechRecog = null;
+
 function startVoiceCommands() {
+  const btn = $('voice-toggle');
+  if (recognitionActive && speechRecog) {
+    speechRecog.stop();
+    return;
+  }
+  
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
     showToast('Voice unavailable', 'This browser does not support speech recognition.', 'low');
     return;
   }
-  const recognition = new SR();
-  recognition.lang = 'en-US';
-  recognition.interimResults = false;
-  recognition.maxAlternatives = 1;
+  
+  speechRecog = new SR();
+  speechRecog.lang = 'en-US';
+  speechRecog.interimResults = false;
+  speechRecog.maxAlternatives = 1;
+  speechRecog.continuous = true;
 
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript.toLowerCase().trim();
+  speechRecog.onstart = () => {
+    recognitionActive = true;
+    if (btn) btn.classList.add('mic-active');
+    showToast('🎤 Listening', 'Try: "density", "briefing", "close", "map".', 'low', 4000);
+  };
+
+  speechRecog.onresult = (event) => {
+    const lastResult = event.results[event.results.length - 1];
+    if (!lastResult.isFinal) return;
+    const transcript = lastResult[0].transcript.toLowerCase().trim();
     showToast('🎤 Heard', transcript, 'low', 3500);
+    
     if (/\b(map|globe|3d|2d)\b/.test(transcript)) toggleMapMode();
     else if (/\b(story|narrative)\b/.test(transcript)) toggleStoryMode();
     else if (/\b(fullscreen|full screen)\b/.test(transcript)) toggleFullscreen();
     else if (/\b(pdf|export|report)\b/.test(transcript)) exportPdf();
     else if (/\b(theme|dark|light)\b/.test(transcript)) toggleTheme();
     else if (/\b(refresh|reload|update)\b/.test(transcript)) refreshAllSources();
+    else if (/\b(compact|density|expand)\b/.test(transcript)) toggleDensity();
+    else if (/\b(close|dismiss|exit)\b/.test(transcript)) document.querySelectorAll('.modal').forEach(m => m.classList.remove('open'));
+    else if (/\b(brief|briefing|summary)\b/.test(transcript)) {
+      generateBrief();
+      const summBtn = $('ai-summary-btn');
+      if(summBtn) {
+        summBtn.style.animation = 'pulseRed 1s 2';
+        setTimeout(() => summBtn.style.animation = '', 2000);
+      }
+    }
     else if (/\b(critical|alert|worst)\b/.test(transcript)) {
       const first = document.querySelector('.item.critical');
       if (first) first.focus();
     } else showToast('Command not recognised', transcript, 'low', 3000);
   };
-  recognition.onerror = (e) => {
-    if (e.error !== 'aborted') showToast('Voice error', e.error, 'low');
+  
+  speechRecog.onend = () => {
+    recognitionActive = false;
+    if (btn) btn.classList.remove('mic-active');
   };
-  recognition.start();
-  showToast('🎤 Listening', 'Try: “map”, “story”, “refresh”, “export”.', 'low', 4000);
+  
+  speechRecog.onerror = (e) => {
+    if (e.error !== 'aborted' && e.error !== 'no-speech') showToast('Voice error', e.error, 'low');
+    recognitionActive = false;
+    if (btn) btn.classList.remove('mic-active');
+  };
+  
+  speechRecog.start();
 }
 
 /* ══════════════════ 25. UI ACTIONS ══════════════════ */
