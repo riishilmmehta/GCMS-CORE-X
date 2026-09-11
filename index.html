@@ -2113,6 +2113,12 @@ function createThreeCinematic(canvas) {
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  /* Correct colour pipeline — without this the earth texture renders pale/grey */
+  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  if (THREE.ACESFilmicToneMapping !== undefined) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+  }
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
@@ -2133,33 +2139,80 @@ function createThreeCinematic(canvas) {
   const earthGroup = new THREE.Group();
   scene.add(earthGroup);
 
-  /* Earth sphere with blue-marble texture */
-  const texture = new THREE.TextureLoader().load(
-    'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg'
-  );
+  /* Earth sphere.
+     Starts as a dark navy so the globe is NEVER white/transparent while the
+     texture is loading — then swaps to the blue-marble texture once it arrives. */
   const earthMat = new THREE.MeshPhongMaterial({
-    map: texture,
-    color: 0xffffff,
+    color: 0x1b2a4a,
+    specular: new THREE.Color(0x0a0a12),
     shininess: 8,
-    emissive: new THREE.Color(0x0a1230),
-    emissiveIntensity: 0.25
+    emissive: new THREE.Color(0x060a18),
+    emissiveIntensity: 0.30
   });
   const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), earthMat);
   earthGroup.add(earth);
 
-  /* Atmosphere rim */
+  /* Texture loader with a multi-CDN fallback chain and a procedural
+     last-resort so the globe is never blank. */
+  const textureLoader = new THREE.TextureLoader();
+  if (typeof textureLoader.setCrossOrigin === 'function') {
+    textureLoader.setCrossOrigin('anonymous');
+  }
+
+  const EARTH_TEXTURE_URLS = [
+    'https://cdn.jsdelivr.net/npm/three-globe@2.31.0/example/img/earth-blue-marble.jpg',
+    'https://unpkg.com/three-globe@2.31.0/example/img/earth-blue-marble.jpg',
+    'https://raw.githubusercontent.com/vasturiano/three-globe/master/example/img/earth-blue-marble.jpg'
+  ];
+
+  let urlIndex = 0;
+  function loadEarthTexture(url) {
+    textureLoader.load(
+      url,
+      (tex) => {
+        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+        const maxAniso = renderer.capabilities.getMaxAnisotropy
+          ? renderer.capabilities.getMaxAnisotropy() : 1;
+        tex.anisotropy = Math.min(8, Math.max(1, maxAniso));
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        earthMat.map = tex;
+        earthMat.color.set(0xffffff);
+        earthMat.emissive.set(0x000000);
+        earthMat.emissiveIntensity = 0;
+        earthMat.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        urlIndex += 1;
+        if (urlIndex < EARTH_TEXTURE_URLS.length) {
+          loadEarthTexture(EARTH_TEXTURE_URLS[urlIndex]);
+        } else {
+          console.warn('[GCMS] All earth texture CDNs failed — using procedural fallback.');
+          const fb = makeFallbackEarthTexture();
+          earthMat.map = fb;
+          earthMat.color.set(0xffffff);
+          earthMat.needsUpdate = true;
+        }
+      }
+    );
+  }
+  loadEarthTexture(EARTH_TEXTURE_URLS[0]);
+
+  /* Atmosphere rim — reduced opacity so it doesn't wash the earth out */
   const atmoMat = new THREE.MeshPhongMaterial({
-    color: 0x4f46e5, transparent: true, opacity: 0.14,
+    color: 0x4f6dff, transparent: true, opacity: 0.08,
     side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false
   });
-  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.03, 48, 48), atmoMat));
+  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.045, 48, 48), atmoMat));
 
-  /* Lighting */
-  scene.add(new THREE.AmbientLight(0x556080, 0.9));
-  const keyLight = new THREE.DirectionalLight(0xffffff, 1.25);
+  /* Lighting — softer ambient so the map stays saturated, brighter key */
+  scene.add(new THREE.AmbientLight(0x2a3358, 0.55));
+  const keyLight = new THREE.DirectionalLight(0xffffff, 1.35);
   keyLight.position.set(5, 3, 5);
   scene.add(keyLight);
-  const rimLight = new THREE.DirectionalLight(0x818cf8, 0.55);
+  const rimLight = new THREE.DirectionalLight(0x818cf8, 0.45);
   rimLight.position.set(-5, -1, -4);
   scene.add(rimLight);
 
@@ -2236,6 +2289,50 @@ function createThreeCinematic(canvas) {
     resize,
     setMarkers
   };
+}
+
+/* Procedural last-resort earth texture — only used if all texture CDNs fail.
+   Prevents the globe from ever rendering blank/white. */
+function makeFallbackEarthTexture() {
+  const w = 1024, h = 512;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, '#0b2a4a');
+  grad.addColorStop(0.5, '#124a7a');
+  grad.addColorStop(1, '#0b2a4a');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, h);
+
+  ctx.fillStyle = '#2a5230';
+  [
+    { x: 0.16, y: 0.28, w: 0.18, h: 0.28 },
+    { x: 0.26, y: 0.62, w: 0.10, h: 0.22 },
+    { x: 0.48, y: 0.30, w: 0.10, h: 0.22 },
+    { x: 0.52, y: 0.55, w: 0.10, h: 0.30 },
+    { x: 0.62, y: 0.22, w: 0.22, h: 0.30 },
+    { x: 0.80, y: 0.66, w: 0.08, h: 0.14 },
+    { x: 0.88, y: 0.20, w: 0.06, h: 0.10 }
+  ].forEach((b) => {
+    ctx.beginPath();
+    ctx.ellipse(b.x * w, b.y * h, b.w * w, b.h * h, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  const img = ctx.getImageData(0, 0, w, h);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 14;
+    img.data[i]     = Math.min(255, Math.max(0, img.data[i] + n));
+    img.data[i + 1] = Math.min(255, Math.max(0, img.data[i + 1] + n));
+    img.data[i + 2] = Math.min(255, Math.max(0, img.data[i + 2] + n));
+  }
+  ctx.putImageData(img, 0, 0);
+
+  const tex = new THREE.CanvasTexture(c);
+  if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+  return tex;
 }
 
 /* ══════════════════ 17. CESIUM 3D ══════════════════ */
