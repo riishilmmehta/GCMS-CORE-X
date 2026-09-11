@@ -4,20 +4,29 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="color-scheme" content="dark light" />
+<meta name="description" content="GCMS CORE X — Real-time global crisis intelligence dashboard." />
 <title>GCMS CORE X — Global Crisis Monitor</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 
 <style>
 :root{
   --bg-deep:#0a0a1a;
+  --bg-panel:rgba(15,23,42,.62);
+  --bg-header:rgba(10,10,26,.88);
   --accent:#818cf8;
   --accent-dark:#4f46e5;
+  --accent-glow:rgba(129,140,248,.4);
   --text-primary:#f8fafc;
   --text-secondary:#a3b1c6;
   --text-muted:#7a8aa3;
@@ -28,76 +37,136 @@
   --glass:rgba(255,255,255,.03);
   --glass-border:rgba(255,255,255,.10);
   --glass-highlight:rgba(255,255,255,.06);
+  --shadow:0 8px 32px rgba(0,0,0,.45);
+  --focus:#a5b4fc;
+  --tap:44px;
   --radius:12px;
 }
 [data-theme="light"]{
-  --bg-deep:#eef2f7; --text-primary:#0f172a; --text-secondary:#334155;
-  --text-muted:#5b6b82; --glass:rgba(255,255,255,.6);
-  --glass-border:rgba(0,0,0,.10); --glass-highlight:rgba(0,0,0,.04);
+  --bg-deep:#eef2f7;
+  --bg-panel:rgba(255,255,255,.75);
+  --bg-header:rgba(255,255,255,.9);
+  --text-primary:#0f172a;
+  --text-secondary:#334155;
+  --text-muted:#5b6b82;
+  --glass:rgba(255,255,255,.6);
+  --glass-border:rgba(0,0,0,.10);
+  --glass-highlight:rgba(0,0,0,.04);
+  --shadow:0 8px 32px rgba(0,0,0,.12);
+  --focus:#4338ca;
 }
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
 body{
-  background:var(--bg-deep);color:var(--text-primary);
-  font-family:'Inter',system-ui,sans-serif;font-size:15px;
-  line-height:1.5;min-height:100vh;overflow-x:hidden;
+  background:var(--bg-deep);
+  color:var(--text-primary);
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  min-height:100vh;
+  overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .3s,color .3s;
 }
 ::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--glass-border);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
 
-/* LOADER */
+.skip-link{position:absolute;left:-9999px;top:0;z-index:10000;
+  background:var(--accent);color:#0a0a1a;padding:.7rem 1.2rem;
+  border-radius:0 0 8px 0;font-weight:700;text-decoration:none}
+.skip-link:focus{left:0}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;scroll-behavior:auto !important}
+}
+
+/* ═══ LOADER ═══ */
 #loader{position:fixed;inset:0;z-index:9999;background:var(--bg-deep);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity .6s,visibility .6s}
+  transition:opacity .9s ease,visibility .9s}
 #loader.hidden{opacity:0;visibility:hidden;pointer-events:none}
-#loader-canvas{position:absolute;inset:0;width:100%;height:100%}
-.loader-content{position:relative;z-index:1;text-align:center;padding:1rem}
+#loader-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.loader-content{position:relative;z-index:1;text-align:center;padding:1rem;pointer-events:none}
+.loader-content .loader-custom{pointer-events:auto}
 .loader-brand{font-family:'Orbitron',sans-serif;font-size:clamp(1.9rem,7vw,4rem);
   font-weight:900;letter-spacing:.14em;
   background:linear-gradient(135deg,var(--text-primary),var(--accent));
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.loader-sub{font-family:'Space Grotesk',sans-serif;font-size:.85rem;
-  color:var(--text-secondary);letter-spacing:.28em;text-transform:uppercase;margin-bottom:2rem}
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;margin-bottom:.4rem}
+.loader-sub{font-family:'Space Grotesk',sans-serif;
+  font-size:clamp(.7rem,1.8vw,.9rem);color:var(--text-secondary);
+  letter-spacing:.28em;text-transform:uppercase;margin-bottom:2.5rem}
 .loader-bar-track{width:min(280px,72vw);height:3px;background:var(--glass-border);
   border-radius:3px;overflow:hidden;margin:0 auto}
 .loader-bar-fill{height:100%;width:0%;
-  background:linear-gradient(90deg,var(--accent-dark),var(--accent));transition:width .3s}
+  background:linear-gradient(90deg,var(--accent-dark),var(--accent));transition:width .3s ease}
 .loader-status{font-family:'JetBrains Mono',monospace;font-size:.72rem;
-  color:var(--text-muted);margin-top:1rem;min-height:1.2em}
+  color:var(--text-muted);margin-top:1rem;letter-spacing:.06em;min-height:1.2em}
+.loader-custom{margin-top:1.8rem;display:flex;gap:.6rem;
+  align-items:center;justify-content:center}
+.loader-custom label{font-size:.72rem;color:var(--text-muted)}
+.loader-custom input[type="color"]{width:34px;height:34px;
+  border:2px solid var(--glass-border);border-radius:50%;padding:2px;
+  background:transparent;cursor:pointer}
+.loader-custom input[type="color"]::-webkit-color-swatch-wrapper{padding:0}
+.loader-custom input[type="color"]::-webkit-color-swatch{border:none;border-radius:50%}
 
-/* CINEMATIC */
+/* ═══ CINEMATIC ═══ */
 #cinematic-view{position:fixed;inset:0;z-index:100;opacity:0;visibility:hidden;
-  transition:opacity 1s,visibility 1s;cursor:pointer;background:#05060f;overflow:hidden}
+  transition:opacity 1.2s ease,visibility 1.2s;cursor:pointer;
+  background:var(--bg-deep);overflow:hidden}
 #cinematic-view.active{opacity:1;visibility:visible}
-#cinematic-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:1}
+#cinematic-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:1}
 .cinematic-vignette{position:absolute;inset:0;z-index:2;pointer-events:none;
-  background:radial-gradient(ellipse at 50% 80%,transparent 0%,transparent 50%,rgba(10,10,26,.85) 92%)}
+  background:radial-gradient(ellipse at 50% 80%,transparent 0%,transparent 50%,rgba(10,10,26,.85) 92%),
+  linear-gradient(to bottom,rgba(10,10,26,.35) 0%,transparent 28%,transparent 70%,rgba(10,10,26,.75) 100%)}
 .cinematic-ui{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;
   align-items:center;padding-top:10vh;pointer-events:none}
-.cinematic-brand{font-family:'Orbitron',sans-serif;font-size:clamp(1.6rem,5.5vw,3.2rem);
-  font-weight:700;letter-spacing:.2em;text-shadow:0 0 40px rgba(129,140,248,.4)}
-.cinematic-tagline{font-family:'Space Grotesk',sans-serif;font-size:.9rem;
-  color:var(--text-secondary);letter-spacing:.42em;text-transform:uppercase;margin-top:.7rem}
+.cinematic-brand{font-family:'Orbitron',sans-serif;
+  font-size:clamp(1.6rem,5.5vw,3.2rem);font-weight:700;letter-spacing:.2em;
+  color:var(--text-primary);text-shadow:0 0 40px var(--accent-glow);
+  opacity:0;transform:translateY(18px);animation:fadeInUp 1s ease .4s forwards}
+.cinematic-tagline{font-family:'Space Grotesk',sans-serif;
+  font-size:clamp(.68rem,1.8vw,.9rem);color:var(--text-secondary);
+  letter-spacing:.42em;text-transform:uppercase;margin-top:.7rem;text-align:center;
+  padding:0 1rem;opacity:0;animation:fadeInUp 1s ease .75s forwards}
 .cinematic-hint{position:absolute;bottom:8vh;left:50%;transform:translateX(-50%);z-index:4;
-  display:flex;flex-direction:column;align-items:center;gap:.7rem}
+  display:flex;flex-direction:column;align-items:center;gap:.7rem;
+  opacity:0;animation:fadeInUp 1s ease 1.3s forwards}
 .hint-pulse{width:52px;height:52px;border-radius:50%;border:2px solid var(--accent);
-  animation:pulse 2s infinite}
+  position:relative;animation:pulseRing 2.4s ease-out infinite}
+.hint-pulse::after{content:'';position:absolute;inset:14px;border-radius:50%;
+  background:var(--accent);opacity:.55;animation:pulseCore 2.4s ease-out infinite}
 .hint-text{font-family:'Space Grotesk',sans-serif;font-size:.75rem;
   letter-spacing:.22em;color:var(--accent);text-transform:uppercase;font-weight:600}
-@keyframes pulse{0%{transform:scale(1);opacity:1}100%{transform:scale(1.7);opacity:0}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseRing{0%{transform:scale(1);opacity:1}100%{transform:scale(1.7);opacity:0}}
+@keyframes pulseCore{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(.78);opacity:1}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
 
-/* DASHBOARD */
+/* ═══ DASHBOARD ═══ */
 #dashboard{display:none;grid-template-rows:auto 1fr;
   grid-template-columns:minmax(300px,340px) minmax(0,1fr) minmax(300px,340px);
   grid-template-areas:"header header header" "left globe right";
-  gap:1px;background:var(--bg-deep);min-height:100vh;width:100%}
-#dashboard.active{display:grid}
+  gap:1px;background:var(--bg-deep);min-height:100vh;width:100%;
+  opacity:0;transition:opacity .8s ease}
+#dashboard.active{display:grid;opacity:1}
 
 .dash-header{grid-area:header;display:flex;align-items:center;justify-content:space-between;
-  gap:.6rem;flex-wrap:wrap;padding:.55rem .9rem;
-  background:rgba(10,10,26,.88);backdrop-filter:blur(20px);
+  gap:.6rem;flex-wrap:wrap;padding:.55rem .9rem;background:var(--bg-header);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
   border-bottom:1px solid var(--glass-border);position:sticky;top:0;z-index:30}
 .header-brand{font-family:'Orbitron',sans-serif;font-size:1rem;font-weight:700;
-  letter-spacing:.08em;display:flex;align-items:center;gap:.45rem}
+  letter-spacing:.08em;display:flex;align-items:center;gap:.45rem;white-space:nowrap}
+.brand-icon{color:var(--accent)}
 .header-actions{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
 
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;
@@ -105,41 +174,69 @@ body{
   background:var(--glass);border:1px solid var(--glass-border);
   color:var(--text-primary);font-family:'Space Grotesk',sans-serif;
   font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap;
-  transition:background .2s,border-color .2s;text-decoration:none}
+  transition:background .2s,border-color .2s,transform .15s,color .2s;
+  text-decoration:none}
 .btn:hover{border-color:var(--accent);background:var(--glass-highlight)}
+.btn:active{transform:scale(.97)}
+.btn[aria-pressed="true"],.btn.btn-active{
+  border-color:var(--accent);background:rgba(129,140,248,.16);color:var(--accent)}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#0a0a1a}
 .btn-primary:hover{background:var(--accent-dark);border-color:var(--accent-dark);color:#fff}
 .btn-icon-only{padding:.35rem;width:38px}
+.btn-sm{font-size:.65rem;padding:.25rem .6rem;min-height:28px}
 
 .sidebar{padding:.75rem;display:flex;flex-direction:column;gap:.75rem;
   overflow-y:auto;z-index:5;min-height:0}
 .sidebar-left{grid-area:left}
 .sidebar-right{grid-area:right}
 
-.panel{background:var(--glass);backdrop-filter:blur(18px);
-  border:1px solid var(--glass-border);border-radius:var(--radius);padding:.85rem}
-.panel-title{font-family:'Space Grotesk',sans-serif;font-size:.72rem;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--text-secondary);
-  display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.6rem}
+.panel{background:var(--glass);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border:1px solid var(--glass-border);border-radius:var(--radius);
+  padding:.85rem;transition:border-color .25s}
+.panel:hover{border-color:rgba(129,140,248,.22)}
+.panel-title{font-family:'Space Grotesk',sans-serif;font-size:.72rem;
+  font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text-secondary);display:flex;align-items:center;
+  justify-content:space-between;gap:.5rem;margin-bottom:.6rem}
 .panel-title .rule{flex:1;height:1px;background:var(--glass-border)}
+.panel-actions{display:flex;gap:.35rem;align-items:center;flex-shrink:0}
 
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
 .stat-card{background:var(--glass-highlight);border:1px solid var(--glass-border);
   border-radius:10px;padding:.65rem .4rem;text-align:center}
-.stat-value{font-family:'Orbitron',sans-serif;font-size:1.45rem;font-weight:700;line-height:1.1}
+.stat-value{font-family:'Orbitron',sans-serif;font-size:1.45rem;
+  font-weight:700;line-height:1.1;color:var(--text-primary)}
 .stat-value.critical{color:var(--critical)}
 .stat-value.high{color:var(--high)}
+.stat-value.muted{color:var(--text-muted)}
 .stat-label{font-size:.62rem;color:var(--text-muted);
   text-transform:uppercase;letter-spacing:.09em;margin-top:.25rem}
 
+.timeline-wrap{margin-top:.7rem}
+.timeline-wrap input[type="range"]{width:100%;height:22px;
+  -webkit-appearance:none;appearance:none;background:transparent;cursor:pointer}
+.timeline-wrap input[type="range"]::-webkit-slider-runnable-track{
+  height:4px;background:var(--glass-border);border-radius:2px}
+.timeline-wrap input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;margin-top:-6px;
+  border-radius:50%;background:var(--accent);border:none}
+.timeline-wrap input[type="range"]::-moz-range-track{
+  height:4px;background:var(--glass-border);border-radius:2px}
+.timeline-wrap input[type="range"]::-moz-range-thumb{
+  width:16px;height:16px;border-radius:50%;background:var(--accent);border:none}
+.timeline-label{display:flex;justify-content:space-between;
+  font-size:.65rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace}
+
 .list{display:flex;flex-direction:column;gap:.45rem}
-.list-scroll{max-height:min(70vh,600px);overflow-y:auto;padding-right:.15rem}
+.list-scroll{max-height:min(46vh,420px);overflow-y:auto;padding-right:.15rem}
 
 .item{width:100%;text-align:left;display:flex;gap:.6rem;align-items:flex-start;
   background:var(--glass);border:1px solid var(--glass-border);
   border-left:3px solid transparent;border-radius:10px;padding:.6rem .65rem;
-  font:inherit;color:inherit;cursor:pointer;transition:background .2s,transform .18s}
-.item:hover{background:var(--glass-highlight);transform:translateX(3px)}
+  font:inherit;color:inherit;cursor:pointer;
+  transition:background .2s,border-color .2s,transform .18s}
+.item:hover{background:var(--glass-highlight);border-color:rgba(129,140,248,.25);
+  transform:translateX(3px)}
 .item.critical{border-left-color:var(--critical)}
 .item.high{border-left-color:var(--high)}
 .item.medium{border-left-color:var(--medium)}
@@ -148,75 +245,156 @@ body{
 .item-main{flex:1;min-width:0}
 .item-top{display:flex;justify-content:space-between;align-items:flex-start;gap:.45rem}
 .item-title{font-size:.78rem;font-weight:600;line-height:1.35;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  color:var(--text-primary);display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
 .item-meta{font-size:.63rem;color:var(--text-muted);display:flex;gap:.4rem;
   align-items:center;flex-wrap:wrap;margin-top:.3rem;
   font-family:'JetBrains Mono',monospace}
 .badge{font-size:.55rem;padding:.12rem .42rem;border-radius:5px;
-  font-weight:700;text-transform:uppercase;flex-shrink:0}
+  font-weight:700;text-transform:uppercase;letter-spacing:.06em;flex-shrink:0}
 .badge-critical{background:rgba(239,68,68,.18);color:var(--critical)}
 .badge-high{background:rgba(251,146,60,.18);color:var(--high)}
 .badge-medium{background:rgba(251,191,36,.18);color:var(--medium)}
 .badge-low{background:rgba(74,222,128,.18);color:var(--low)}
 .badge-cat{background:rgba(129,140,248,.14);color:var(--accent);
   font-size:.55rem;padding:.1rem .4rem;border-radius:5px;
-  text-transform:uppercase;font-weight:700}
-
-.thumb{position:relative;flex:0 0 64px;width:64px;height:64px;border-radius:9px;
-  overflow:hidden;border:1px solid var(--glass-border);
-  background:linear-gradient(135deg,#1e293b,#0f172a);
-  display:flex;align-items:center;justify-content:center}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.thumb .thumb-emoji{font-size:1.6rem}
-
+  text-transform:uppercase;letter-spacing:.07em;font-weight:700}
+.badge-conf{background:var(--glass-highlight);color:var(--text-muted);
+  font-size:.55rem;padding:.1rem .4rem;border-radius:5px;
+  font-family:'JetBrains Mono',monospace}
 .empty{padding:1.4rem .7rem;text-align:center;font-size:.75rem;
   color:var(--text-muted);font-family:'JetBrains Mono',monospace;line-height:1.6}
 .empty.error{color:var(--high)}
 
-.globe-area{grid-area:globe;position:relative;overflow:hidden;min-height:0;background:#05060f}
-#globe-canvas{position:absolute;inset:0;width:100%;height:100%}
+.thumb{position:relative;flex:0 0 54px;width:54px;height:54px;
+  border-radius:9px;overflow:hidden;border:1px solid var(--glass-border);
+  background:linear-gradient(135deg,var(--c1,#1e293b),var(--c2,#0f172a));
+  display:flex;align-items:center;justify-content:center}
+.thumb-emoji{font-size:1.35rem;line-height:1}
+.thumb img{position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;opacity:0;transition:opacity .4s}
+.thumb.has-img img{opacity:1}
+
+.source-list{display:flex;flex-direction:column;gap:.4rem}
+.source-row{display:flex;align-items:center;gap:.55rem;
+  font-size:.7rem;padding:.35rem .2rem}
+.source-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;
+  background:var(--text-muted)}
+.source-dot[data-status="live"]{background:var(--low);box-shadow:0 0 8px var(--low)}
+.source-dot[data-status="recent"]{background:var(--medium)}
+.source-dot[data-status="stale"]{background:var(--high)}
+.source-dot[data-status="error"]{background:var(--critical)}
+.source-dot[data-status="loading"]{background:var(--accent);animation:blink 1.2s ease infinite}
+.source-dot[data-status="idle"]{background:var(--text-muted)}
+.source-name{flex:1;color:var(--text-secondary)}
+.source-status{font-family:'JetBrains Mono',monospace;font-size:.58rem;
+  color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+
+.globe-area{grid-area:globe;position:relative;overflow:hidden;
+  min-height:0;background:#05060f}
+#cesium-container,#leaflet-map{position:absolute;inset:0;width:100%;height:100%}
+#cesium-container{z-index:1;background:#05060f;touch-action:none}
+#cesium-container.zoom-active{box-shadow:inset 0 0 0 2px var(--accent)}
+#cesium-container .cesium-widget,
+#cesium-container .cesium-widget canvas{width:100% !important;height:100% !important}
+.cesium-widget-credits{display:none !important}
+#leaflet-map{opacity:0;pointer-events:none;transition:opacity .5s;z-index:2}
+#leaflet-map.active{opacity:1;pointer-events:auto}
 #map-status{position:absolute;top:.7rem;left:.7rem;z-index:6;
   background:rgba(10,10,26,.82);backdrop-filter:blur(12px);
   border:1px solid var(--glass-border);border-radius:8px;
   padding:.4rem .75rem;font-size:.68rem;color:var(--text-secondary);
   font-family:'JetBrains Mono',monospace;pointer-events:none}
+#globe-zoom-hint{position:absolute;bottom:.7rem;left:50%;transform:translateX(-50%);
+  z-index:6;background:rgba(10,10,26,.82);backdrop-filter:blur(12px);
+  border:1px solid var(--glass-border);border-radius:8px;
+  padding:.4rem .75rem;font-size:.65rem;color:var(--text-muted);
+  font-family:'JetBrains Mono',monospace;pointer-events:none;
+  transition:opacity .3s;white-space:nowrap}
+#globe-zoom-hint.active{opacity:0}
 
-/* MODAL */
+.chart-box{position:relative;height:140px;width:100%;margin-top:.4rem}
+
 .modal-overlay{display:none;position:fixed;inset:0;z-index:2000;
-  background:rgba(0,0,0,.78);backdrop-filter:blur(8px);
-  align-items:center;justify-content:center;padding:1rem;overflow-y:auto}
+  background:rgba(0,0,0,.72);backdrop-filter:blur(8px);
+  align-items:center;justify-content:center;padding:1rem}
 .modal-overlay.active{display:flex}
 .modal{position:relative;background:var(--bg-deep);
   border:1px solid var(--glass-border);border-radius:16px;
-  padding:1.6rem;width:100%;max-width:720px;max-height:90vh;overflow-y:auto;
-  animation:modalIn .3s}
+  padding:1.6rem;width:100%;max-width:560px;max-height:86vh;overflow-y:auto;
+  box-shadow:var(--shadow);animation:modalIn .3s cubic-bezier(.16,1,.3,1)}
+.modal-wide{max-width:680px}
 @keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(16px)}to{opacity:1;transform:none}}
 .modal h2{font-family:'Orbitron',sans-serif;font-size:1.15rem;
-  color:var(--text-primary);margin-bottom:.6rem;line-height:1.4}
+  color:var(--text-primary);margin-bottom:.9rem;line-height:1.4}
 .modal-close{position:absolute;top:.8rem;right:.8rem;width:38px;height:38px;
   border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);
-  color:var(--text-secondary);cursor:pointer;font-size:.9rem;z-index:10}
+  color:var(--text-secondary);cursor:pointer;font-size:.9rem;
+  display:flex;align-items:center;justify-content:center;
+  transition:color .2s,border-color .2s}
 .modal-close:hover{color:var(--critical);border-color:var(--critical)}
 
-.hero{position:relative;width:100%;height:280px;border-radius:12px;
-  overflow:hidden;margin-bottom:1rem;background:linear-gradient(135deg,#1e293b,#0f172a);
+.shortcut-grid{display:grid;grid-template-columns:1fr 1fr;
+  gap:.6rem 1.4rem;text-align:left}
+.shortcut-grid kbd{background:var(--glass-border);padding:.15rem .5rem;
+  border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:.78rem;
+  color:var(--text-primary)}
+.detail-row{display:flex;justify-content:space-between;gap:1rem;
+  padding:.5rem 0;border-bottom:1px solid var(--glass-border);font-size:.78rem}
+.detail-row b{color:var(--text-secondary);font-weight:600;flex-shrink:0}
+.detail-row span{color:var(--text-primary);text-align:right;word-break:break-word}
+
+.hero{position:relative;width:100%;height:230px;border-radius:12px;
+  overflow:hidden;margin-bottom:.9rem;
+  background:linear-gradient(135deg,var(--c1,#1e293b),var(--c2,#0f172a));
   display:flex;align-items:center;justify-content:center}
-.hero img{width:100%;height:100%;object-fit:cover;display:block}
-.hero-emoji{font-size:4rem}
-.article-body{font-size:.92rem;color:var(--text-secondary);line-height:1.75}
-.article-body p{margin-bottom:.9rem}
-.article-body.loading{color:var(--text-muted);font-style:italic}
+.hero-emoji{font-size:3.6rem;z-index:1}
+.hero img{position:absolute;inset:0;width:100%;height:100%;
+  object-fit:cover;opacity:0;transition:opacity .5s;z-index:2}
+.hero.has-img img{opacity:1}
+.hero-caption{position:absolute;bottom:.6rem;left:.85rem;z-index:4;
+  font-family:'Space Grotesk',sans-serif;font-size:.62rem;
+  letter-spacing:.15em;text-transform:uppercase;
+  color:#fff;font-weight:700;text-shadow:0 2px 8px rgba(0,0,0,.9)}
+.article-body{font-size:.85rem;color:var(--text-secondary);
+  line-height:1.7;max-height:40vh;overflow-y:auto}
+.article-body p{margin-bottom:.75rem}
+.hint-text-sm{color:var(--text-muted);font-size:.75rem;line-height:1.6}
 
 #toast-container{position:fixed;top:74px;right:12px;z-index:3000;
-  display:flex;flex-direction:column;gap:.5rem;max-width:min(360px,calc(100vw - 24px))}
-.toast{background:rgba(10,10,26,.95);backdrop-filter:blur(20px);
-  border:1px solid var(--glass-border);border-left:4px solid var(--accent);
-  border-radius:10px;padding:.75rem .95rem;pointer-events:auto;
-  animation:toastIn .4s}
+  display:flex;flex-direction:column;gap:.5rem;
+  max-width:min(360px,calc(100vw - 24px));pointer-events:none}
+.toast{background:rgba(10,10,26,.92);backdrop-filter:blur(20px);
+  border:1px solid var(--glass-border);border-left:4px solid var(--critical);
+  border-radius:10px;padding:.75rem .95rem;box-shadow:var(--shadow);
+  pointer-events:auto;cursor:pointer;animation:toastIn .45s cubic-bezier(.16,1,.3,1)}
+.toast.removing{animation:toastOut .35s ease forwards}
 @keyframes toastIn{from{opacity:0;transform:translateX(110%)}to{opacity:1;transform:none}}
-.toast-title{font-size:.82rem;font-weight:600;color:var(--text-primary)}
+@keyframes toastOut{to{opacity:0;transform:translateX(110%)}}
+.toast-head{display:flex;align-items:center;gap:.4rem;margin-bottom:.2rem}
+.toast-label{font-size:.58rem;text-transform:uppercase;
+  letter-spacing:.13em;font-weight:800}
+.toast-title{font-size:.82rem;font-weight:600;line-height:1.35;color:var(--text-primary)}
 .toast-meta{font-size:.65rem;color:var(--text-muted);margin-top:.2rem;
   font-family:'JetBrains Mono',monospace}
+
+#story-mode{display:none;min-height:100vh}
+#story-mode.active{display:block}
+.story-slide{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:4rem 1.5rem;border-bottom:1px solid var(--glass-border);
+  background:radial-gradient(ellipse at 30% 50%,rgba(129,140,248,.05) 0%,transparent 70%)}
+.story-content{max-width:820px;width:100%;text-align:center}
+.story-slide h2{font-family:'Orbitron',sans-serif;
+  font-size:clamp(1.7rem,4.5vw,2.9rem);margin-bottom:1rem;
+  background:linear-gradient(135deg,var(--text-primary),var(--accent));
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent}
+.story-slide p{font-size:clamp(.95rem,1.4vw,1.1rem);color:var(--text-secondary);
+  line-height:1.8;max-width:640px;margin:0 auto 1.5rem}
+.story-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+  gap:1rem;margin-top:1.5rem}
+
+[data-theme="light"] .leaflet-container{background:#dbe4ee !important}
 
 @media (max-width:1100px){
   #dashboard{grid-template-columns:1fr;
@@ -226,148 +404,362 @@ body{
   .list-scroll{max-height:none}
 }
 @media (max-width:640px){
-  .dash-header{padding:.5rem .6rem}
+  body{font-size:14px}
+  .dash-header{padding:.5rem .6rem;gap:.4rem}
   .header-brand{font-size:.85rem}
-  .btn{min-height:40px;padding:.5rem .75rem}
-  .btn-icon-only{width:40px;height:40px}
-  #toast-container{top:auto;bottom:12px;left:12px;right:12px;max-width:none}
+  .btn{min-height:var(--tap);padding:.5rem .75rem;font-size:.72rem}
+  .btn-icon-only{width:var(--tap);height:var(--tap)}
+  .btn-sm{min-height:34px}
+  .sidebar{padding:.6rem}
+  .panel{padding:.75rem}
+  .stat-value{font-size:1.25rem}
+  .shortcut-grid{grid-template-columns:1fr}
+  .modal{padding:1.2rem}
+  #toast-container{top:auto;bottom:12px;right:12px;left:12px;max-width:none}
 }
 </style>
 </head>
 <body>
+<a class="skip-link" href="#main-content">Skip to main content</a>
 
-<div id="loader" role="status">
-  <canvas id="loader-canvas"></canvas>
+<!-- LOADER -->
+<div id="loader" role="status" aria-live="polite" aria-label="Loading GCMS CORE X">
+  <canvas id="loader-canvas" aria-hidden="true"></canvas>
   <div class="loader-content">
     <div class="loader-brand">GCMS CORE X</div>
     <div class="loader-sub">Global Crisis Monitor System</div>
     <div class="loader-bar-track"><div class="loader-bar-fill" id="loader-bar"></div></div>
     <div class="loader-status" id="loader-status">Initializing…</div>
+    <div class="loader-custom">
+      <label for="loader-color">Accent</label>
+      <input type="color" id="loader-color" value="#818cf8" aria-label="Choose accent colour" />
+    </div>
   </div>
 </div>
 
-<div id="cinematic-view" role="button" tabindex="0">
-  <canvas id="cinematic-canvas"></canvas>
-  <div class="cinematic-vignette"></div>
+<!-- CINEMATIC -->
+<div id="cinematic-view" role="button" tabindex="0" aria-label="Enter GCMS CORE X dashboard">
+  <canvas id="cinematic-canvas" aria-hidden="true"></canvas>
+  <div class="cinematic-vignette" aria-hidden="true"></div>
   <div class="cinematic-ui">
     <div class="cinematic-brand">GCMS CORE X</div>
     <div class="cinematic-tagline">Real-time Global Crisis Intelligence</div>
   </div>
-  <div class="cinematic-hint">
+  <div class="cinematic-hint" aria-hidden="true">
     <div class="hint-pulse"></div>
     <div class="hint-text">Tap to Access</div>
   </div>
 </div>
 
+<!-- DASHBOARD -->
 <div id="dashboard">
   <header class="dash-header">
     <div class="header-brand">
-      <span style="color:var(--accent)">◆</span>
+      <span class="brand-icon" aria-hidden="true">◆</span>
       <span>GCMS CORE X</span>
-      <span style="font-size:.55rem;color:var(--text-muted)">v7.0</span>
+      <span style="font-size:.55rem;font-weight:400;color:var(--text-muted)">v8.0</span>
     </div>
-    <div class="header-actions">
-      <span id="clock" style="font-family:'JetBrains Mono',monospace;
-        font-size:.65rem;color:var(--text-muted)">--:--:-- UTC</span>
-      <button class="btn btn-icon-only" id="theme-toggle" title="Toggle theme">🌓</button>
-      <button class="btn" id="refresh-btn" title="Refresh all">⟳ Refresh</button>
+    <div class="header-actions" role="toolbar" aria-label="Dashboard controls">
+      <span id="clock" style="font-family:'JetBrains Mono',monospace;font-size:.65rem;color:var(--text-muted)">--:--:-- UTC</span>
+      <button class="btn" id="map-toggle" type="button" aria-pressed="true" title="Toggle 3D / 2D map">🌍 3D</button>
+      <button class="btn btn-icon-only" id="theme-toggle" type="button" title="Toggle theme" aria-label="Toggle dark or light theme">🌓</button>
+      <button class="btn btn-icon-only" id="fullscreen-toggle" type="button" title="Fullscreen" aria-label="Toggle fullscreen">⛶</button>
+      <button class="btn btn-icon-only" id="pdf-export" type="button" title="Export PDF report" aria-label="Export PDF report">📄</button>
+      <button class="btn btn-icon-only" id="voice-toggle" type="button" title="Voice commands" aria-label="Start voice commands">🎤</button>
+      <button class="btn" id="story-toggle" type="button" aria-pressed="false" title="Story mode">📖 Story</button>
+      <button class="btn btn-icon-only" id="shortcuts-toggle" type="button" title="Keyboard shortcuts" aria-label="Show keyboard shortcuts">⌨️</button>
     </div>
   </header>
 
-  <aside class="sidebar sidebar-left">
-    <section class="panel">
-      <h2 class="panel-title">Crisis Overview <span class="rule"></span></h2>
+  <aside class="sidebar sidebar-left" aria-label="Crisis overview">
+    <section class="panel" aria-labelledby="ov-title">
+      <h2 class="panel-title" id="ov-title">Crisis Overview <span class="rule"></span></h2>
       <div class="stat-grid">
         <div class="stat-card">
-          <div class="stat-value critical" id="stat-active">—</div>
+          <div class="stat-value critical" id="stat-active" aria-live="polite">—</div>
           <div class="stat-label">Active Events</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value high" id="stat-alerts">—</div>
+          <div class="stat-value high" id="stat-alerts" aria-live="polite">—</div>
           <div class="stat-label">High / Critical</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value" id="stat-news">—</div>
-          <div class="stat-label">Headlines</div>
+          <div class="stat-value" id="stat-confidence">—</div>
+          <div class="stat-label">Mean Confidence</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-score">—</div>
           <div class="stat-label">Crisis Index</div>
         </div>
       </div>
+      <div class="timeline-wrap">
+        <label class="sr-only" for="timeline-slider">Time window in days</label>
+        <input type="range" id="timeline-slider" min="1" max="7" value="7" step="1" />
+        <div class="timeline-label">
+          <span>7 days ago</span>
+          <span id="timeline-label">Now</span>
+        </div>
+      </div>
+      <p class="hint-text-sm" style="margin-top:.5rem">
+        Crisis Index is derived from live event severity, recency decay and source confidence — deterministic for a given dataset.
+      </p>
     </section>
 
-    <section class="panel" style="flex:1;min-height:0">
-      <h2 class="panel-title">Recent Events <span class="rule"></span>
-        <span id="ev-count" style="font-family:'JetBrains Mono',monospace;
-          font-size:.6rem;color:var(--text-muted)">0</span>
+    <section class="panel" aria-labelledby="src-title">
+      <h2 class="panel-title" id="src-title">Data Sources <span class="rule"></span></h2>
+      <div class="source-list" id="source-list"></div>
+    </section>
+
+    <section class="panel" style="flex:1;min-height:0" aria-labelledby="ev-title">
+      <h2 class="panel-title" id="ev-title">
+        Recent Events <span class="rule"></span>
+        <span class="badge badge-conf" id="ev-count">0</span>
       </h2>
       <div class="list list-scroll" id="event-list"></div>
     </section>
   </aside>
 
-  <main class="globe-area">
-    <canvas id="globe-canvas"></canvas>
-    <div id="map-status">Initialising map…</div>
+  <main class="globe-area" id="main-content" aria-label="Global crisis map">
+    <div id="cesium-container" role="application" aria-label="Interactive 3D globe showing crisis events" tabindex="0"></div>
+    <div id="leaflet-map" aria-hidden="true"></div>
+    <div id="map-status" role="status" aria-live="polite">Initialising map…</div>
+    <div id="globe-zoom-hint">Click globe to activate zoom · drag rotates</div>
   </main>
 
-  <aside class="sidebar sidebar-right">
-    <section class="panel" style="flex:1;min-height:0">
-      <h2 class="panel-title">Crisis News <span class="rule"></span>
-        <span id="news-count" style="font-family:'JetBrains Mono',monospace;
-          font-size:.6rem;color:var(--text-muted)">0</span>
+  <aside class="sidebar sidebar-right" aria-label="Intelligence feeds">
+    <section class="panel" aria-labelledby="al-title">
+      <h2 class="panel-title" id="al-title">
+        Priority Alerts <span class="rule"></span>
+        <span class="badge badge-conf" id="al-count">0</span>
       </h2>
-      <div class="list list-scroll" id="news-feed" style="max-height:70vh"></div>
+      <div class="list list-scroll" id="alert-list" style="max-height:220px"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="ai-title">
+      <h2 class="panel-title" id="ai-title">
+        Automated Brief <span class="rule"></span>
+        <button class="btn btn-sm" id="ai-summary-btn" type="button">Generate</button>
+      </h2>
+      <div id="ai-summary-text" class="hint-text-sm" style="min-height:44px">
+        Rule-based summary from live headlines. Not a language model.
+      </div>
+    </section>
+
+    <section class="panel" style="flex:1;min-height:0" aria-labelledby="news-title">
+      <h2 class="panel-title" id="news-title">
+        Crisis News <span class="rule"></span>
+        <span class="panel-actions">
+          <button class="btn btn-sm btn-icon-only" id="news-refresh-btn" type="button" title="Refresh news" aria-label="Refresh news">⟳</button>
+        </span>
+      </h2>
+      <label class="sr-only" for="news-search">Search headlines</label>
+      <input type="search" id="news-search"
+             placeholder="Search world headlines…"
+             style="width:100%;padding:.5rem .8rem;border-radius:999px;
+             border:1px solid var(--glass-border);background:var(--glass);
+             color:var(--text-primary);font:inherit;font-size:.78rem;margin-bottom:.55rem" />
+      <div id="news-chips" style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.55rem"></div>
+      <div class="list list-scroll" id="news-feed"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="trend-title">
+      <h2 class="panel-title" id="trend-title">7-Day Severity Trend <span class="rule"></span></h2>
+      <div class="chart-box"><canvas id="trend-chart" role="img" aria-label="Bar chart of severity over seven days"></canvas></div>
     </section>
   </aside>
 </div>
 
-<div class="modal-overlay" id="article-modal">
+<!-- STORY MODE -->
+<div id="story-mode">
+  <section class="story-slide">
+    <div class="story-content">
+      <h2>🌍 Weekly Crisis Brief</h2>
+      <p>Narrative generated from the live event set currently loaded in the dashboard.</p>
+      <div class="story-stats">
+        <div class="stat-card"><div class="stat-value" id="story-events">—</div><div class="stat-label">Events</div></div>
+        <div class="stat-card"><div class="stat-value critical" id="story-critical">—</div><div class="stat-label">Critical</div></div>
+        <div class="stat-card"><div class="stat-value high" id="story-high">—</div><div class="stat-label">High</div></div>
+        <div class="stat-card"><div class="stat-value" id="story-confidence">—</div><div class="stat-label">Confidence</div></div>
+      </div>
+    </div>
+  </section>
+  <section class="story-slide">
+    <div class="story-content">
+      <h2>📈 Observed Trend</h2>
+      <p>Event counts by severity, bucketed from real timestamps in the last seven days.</p>
+      <div class="chart-box" style="height:260px;max-width:620px;margin:1.5rem auto">
+        <canvas id="story-trend-chart" role="img" aria-label="Severity trend over seven days"></canvas>
+      </div>
+    </div>
+  </section>
+  <section class="story-slide">
+    <div class="story-content">
+      <h2>🌊 Humanitarian Snapshot</h2>
+      <p>Figures below are derived only from what the ReliefWeb disaster feed returns. Nothing is hard-coded.</p>
+      <div class="story-stats">
+        <div class="stat-card"><div class="stat-value high" id="story-disasters">—</div><div class="stat-label">Active Disasters</div></div>
+        <div class="stat-card"><div class="stat-value" id="story-countries">—</div><div class="stat-label">Countries Affected</div></div>
+        <div class="stat-card"><div class="stat-value" id="story-sources">—</div><div class="stat-label">Distinct Sources</div></div>
+      </div>
+      <p class="hint-text-sm" id="story-humanitarian-note" style="margin-top:1rem"></p>
+    </div>
+  </section>
+  <section class="story-slide">
+    <div class="story-content">
+      <h2>📰 Intelligence Brief</h2>
+      <p>Live headlines ranked by source confidence and recency.</p>
+      <div id="story-news-feed" class="list" style="max-width:560px;margin:1.5rem auto;text-align:left"></div>
+      <button class="btn btn-primary" type="button" onclick="location.reload()">🔄 Reload data</button>
+    </div>
+  </section>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="sc-title">
   <div class="modal">
-    <button class="modal-close" id="article-close">✕</button>
-    <div id="article-hero"></div>
-    <div id="article-source" style="font-size:.7rem;color:var(--text-muted);
-      font-family:'JetBrains Mono',monospace;margin-bottom:.5rem"></div>
-    <h2 id="article-title"></h2>
-    <div id="article-body" class="article-body"></div>
-    <div style="display:flex;gap:.5rem;margin-top:1.2rem;flex-wrap:wrap">
-      <a class="btn btn-primary" id="article-open" target="_blank" rel="noopener noreferrer">Open on publisher ↗</a>
+    <button class="modal-close" type="button" data-close aria-label="Close">✕</button>
+    <h2 id="sc-title">⌨️ Keyboard Shortcuts</h2>
+    <div class="shortcut-grid">
+      <span><kbd>M</kbd> Toggle map mode</span>
+      <span><kbd>S</kbd> Story mode</span>
+      <span><kbd>F</kbd> Fullscreen</span>
+      <span><kbd>P</kbd> Export PDF</span>
+      <span><kbd>T</kbd> Theme</span>
+      <span><kbd>R</kbd> Refresh data</span>
+      <span><kbd>/</kbd> Focus search</span>
+      <span><kbd>Esc</kbd> Close dialogs</span>
+      <span><kbd>?</kbd> This menu</span>
     </div>
   </div>
 </div>
 
-<div id="toast-container"></div>
+<div class="modal-overlay" id="news-detail-modal" role="dialog" aria-modal="true" aria-labelledby="nd-title">
+  <div class="modal modal-wide">
+    <button class="modal-close" type="button" data-close aria-label="Close">✕</button>
+    <div id="nd-image"></div>
+    <div id="nd-badges" style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.5rem"></div>
+    <h2 id="nd-title"></h2>
+    <div id="nd-meta" style="font-size:.68rem;color:var(--text-muted);
+      font-family:'JetBrains Mono',monospace;margin:.35rem 0 .85rem"></div>
+    <div id="nd-body" class="article-body"></div>
+    <div style="display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap">
+      <button class="btn btn-primary" id="nd-load-btn" type="button">📄 Load full article</button>
+      <a class="btn" id="nd-open-link" href="#" target="_blank" rel="noopener noreferrer">Open source ↗</a>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="event-detail-modal" role="dialog" aria-modal="true" aria-labelledby="ed-title">
+  <div class="modal modal-wide">
+    <button class="modal-close" type="button" data-close aria-label="Close">✕</button>
+    <h2 id="ed-title"></h2>
+    <div id="ed-body"></div>
+    <div id="ed-related-wrap" style="margin-top:1.2rem;display:none">
+      <div class="panel-title" style="margin-bottom:.5rem">
+        Related News <span class="rule"></span>
+      </div>
+      <div class="list" id="ed-related"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container" role="status" aria-live="polite" aria-atomic="false"></div>
 
 <script>
+/* ═══════════════════════════════════════════════════════════════════════
+   GCMS CORE X — v8.0
+   Resilient pipeline: proxy race → normalise → dedupe → analytics → render
+   News: multi-proxy race + Jina Reader for full article text.
+   Globe: Cesium 3D with pin-click → event modal + related news.
+   Zoom: click-to-activate so wheel doesn't hijack page scroll.
+   ═══════════════════════════════════════════════════════════════════════ */
+(() => {
 'use strict';
 
-/* ═══════════════════════════════════════════════════════════════
-   GCMS CORE X — client-only resilient news reader
-   Layers:
-   1. Proxy race → fetch Google News RSS through 4 free proxies
-   2. Parse RSS → extract title, link, image, source, pubDate
-   3. Click a card → try Jina Reader (r.jina.ai) for full text
-   4. If Jina fails → try direct (rare) → else show link only
-   5. If RSS completely fails → curated fallback headlines
-   ═══════════════════════════════════════════════════════════════ */
-
-const $ = id => document.getElementById(id);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const esc = v => String(v ?? '').replace(/[&<>"']/g, c => (
-  {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
-));
-const timeAgo = ts => {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (!Number.isFinite(s) || s < 0) return 'just now';
-  if (s < 60) return 'just now';
-  if (s < 3600) return Math.floor(s/60) + 'm ago';
-  if (s < 86400) return Math.floor(s/3600) + 'h ago';
-  return Math.floor(s/86400) + 'd ago';
+/* ══════════════════ 1. CONFIG ══════════════════ */
+const CONFIG = {
+  cesiumToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6Ild5X2t5SWZ5QTdHbGxEb2QiLCJqdGkiOiIzZTJiN2U4Ny05NzE0LTRkOTItOTdiMi00MzQwMzc1YjljYTciLCJpZCI6NDc4ODc3LCJzdWIiOiJyaWlzaGlsIiwiaXNzIjoiaHR0cHM6Ly9hcGkuY2VzaXVtLmNvbSIsImF1ZCI6IlVudGl0bGVkIiwiaWF0IjoxNzg5MTI1MDQwfQ.Zur1s8sJPSFjcAi1RsuyUsIq7Mnr5_pi7w1pxMHb5PA',
+  cesiumVersion: '1.119.0',
+  httpTimeoutMs: 12000,
+  refreshMs: 120000,
+  maxNews: 40,
+  maxEvents: 400
 };
 
-/* ═══════════════ PROXY RACE ═══════════════
-   Race 4 free CORS proxies in parallel. First one to return
-   readable text within 8 seconds wins. */
+const RELIABILITY = {
+  'usgs': 1.00, 'earthquake.usgs.gov': 1.00,
+  'reliefweb': 0.95, 'reliefweb.int': 0.95,
+  'who': 0.95, 'who.int': 0.95,
+  'un news': 0.90, 'news.un.org': 0.90,
+  'reuters': 0.92, 'reuters.com': 0.92,
+  'ap': 0.92, 'apnews.com': 0.92,
+  'bbc': 0.88, 'bbc.co.uk': 0.88, 'bbc.com': 0.88,
+  'ifrc': 0.90, 'ifrc.org': 0.90,
+  'unhcr': 0.90, 'unhcr.org': 0.90,
+  'gdelt': 0.70, 'gdeltproject.org': 0.70,
+  'google news': 0.60, 'news.google.com': 0.60,
+  'reddit': 0.35, 'reddit.com': 0.35
+};
+const DEFAULT_RELIABILITY = 0.55;
+
+/* ══════════════════ 2. UTILITIES ══════════════════ */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, c => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+function safeUrl(value) {
+  try {
+    const u = new URL(String(value), location.href);
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '#';
+  } catch { return '#'; }
+}
+
+function safeImg(value) {
+  const s = String(value || '');
+  if (s.startsWith('data:image/svg+xml')) return s;
+  try {
+    const u = new URL(s, location.href);
+    return u.protocol === 'https:' ? u.href : '';
+  } catch { return ''; }
+}
+
+function hashStr(str) {
+  let h = 2166136261;
+  const s = String(str || '');
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i); h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+
+const DAY_MS = 86400000;
+
+function timeAgo(ts) {
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (!Number.isFinite(s) || s < 0) return 'just now';
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+function formatUtc(ts) {
+  const d = new Date(ts);
+  if (isNaN(d)) return '—';
+  return d.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+function severityColor(sev) {
+  return { critical: '#ef4444', high: '#fb923c', medium: '#fbbf24', low: '#4ade80' }[sev] || '#4ade80';
+}
+
+/* ══════════════════ 3. PROXY RACE ══════════════════ */
 const PROXIES = [
   u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
   u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
@@ -381,14 +773,13 @@ async function fetchThroughRace(url, timeoutMs = 9000) {
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await fetch(buildUrl(url), {
-        signal: ctrl.signal,
-        referrerPolicy: 'no-referrer'
+        signal: ctrl.signal, referrerPolicy: 'no-referrer'
       });
       clearTimeout(timer);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const text = await res.text();
-      if (!text || text.length < 100) throw new Error('empty');
-      console.log(`[proxy ${i}] ✓ ${url.slice(0,60)}… (${text.length}b)`);
+      if (!text || text.length < 50) throw new Error('empty');
+      console.log(`[proxy ${i}] ✓ ${url.slice(0, 60)}… (${text.length}b)`);
       return text;
     } catch (e) {
       clearTimeout(timer);
@@ -396,286 +787,1462 @@ async function fetchThroughRace(url, timeoutMs = 9000) {
       throw e;
     }
   });
+  try { return await Promise.any(attempts); }
+  catch { throw new Error('all proxies failed'); }
+}
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = CONFIG.httpTimeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    return await Promise.any(attempts);
-  } catch {
-    throw new Error('all proxies failed');
-  }
+    const res = await fetch(url, { ...options, signal: ctrl.signal, referrerPolicy: 'no-referrer' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res;
+  } finally { clearTimeout(timer); }
 }
 
-/* ═══════════════ RSS FETCH ═══════════════ */
-const FEEDS = [
-  'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',
-  'https://news.google.com/rss/search?q=conflict+OR+earthquake+OR+flood+OR+war&hl=en-US&gl=US&ceid=US:en',
-  'https://news.google.com/rss/search?q=crisis+OR+humanitarian+OR+refugee&hl=en-US&gl=US&ceid=US:en'
+/* ══════════════════ 4. SOURCE HEALTH ══════════════════ */
+const SOURCES = {
+  usgs:      { label: 'USGS Seismic',     status: 'idle', at: null, count: 0, error: null },
+  reliefweb: { label: 'ReliefWeb',        status: 'idle', at: null, count: 0, error: null },
+  gdelt:     { label: 'GDELT',            status: 'idle', at: null, count: 0, error: null },
+  news:      { label: 'News (RSS/GDELT)', status: 'idle', at: null, count: 0, error: null },
+  social:    { label: 'Social',           status: 'idle', at: null, count: 0, error: null }
+};
+
+function markSource(key, status, count, error) {
+  const s = SOURCES[key]; if (!s) return;
+  s.status = status; s.at = Date.now();
+  if (typeof count === 'number') s.count = count;
+  s.error = error || null;
+  renderSourceHealth();
+}
+
+function freshnessOf(source) {
+  if (!source.at) return 'idle';
+  if (source.status === 'error') return 'error';
+  if (source.status === 'loading') return 'loading';
+  const age = Date.now() - source.at;
+  if (age < 15 * 60 * 1000) return 'live';
+  if (age < 60 * 60 * 1000) return 'recent';
+  return 'stale';
+}
+
+function renderSourceHealth() {
+  const el = $('source-list'); if (!el) return;
+  el.innerHTML = Object.entries(SOURCES).map(([, s]) => {
+    const f = freshnessOf(s);
+    const detail = s.status === 'error' ? 'error'
+      : s.status === 'loading' ? 'loading'
+      : `${s.count} · ${f}`;
+    return `<div class="source-row">
+      <span class="source-dot" data-status="${f}" aria-hidden="true"></span>
+      <span class="source-name">${esc(s.label)}</span>
+      <span class="source-status">${esc(detail)}</span>
+    </div>`;
+  }).join('');
+}
+
+/* ══════════════════ 5. CATEGORY + THEME ══════════════════ */
+const CATEGORY_RULES = [
+  [/earthquake|seismic|\bquake\b|tremor|tsunami|volcan|eruption|landslide|avalanche|wildfire|wild fire|bushfire|flood|flooding|monsoon|hurricane|typhoon|cyclone|tornado|drought|famine|heatwave|heat wave|blizzard|storm surge/i, 'Disaster'],
+  [/war|conflict|airstrike|air strike|missile|shelling|bomb|drone strike|troops|military|invasion|offensive|frontline|ceasefire|clash|artillery|hostage|militant|insurgen/i, 'Conflict'],
+  [/covid|coronavirus|virus|outbreak|epidemic|pandemic|vaccine|vaccinat|cholera|ebola|mpox|malaria|hospital|healthcare|disease|who warns/i, 'Health'],
+  [/climate|warming|emission|carbon|decarbon|glacier|arctic|sea level|renewable|biodiversity|deforestation/i, 'Climate'],
+  [/election|parliament|sanction|minister|diplomat|summit|treaty|nato|united nations|\bvote\b|referendum|protest|riot|unrest/i, 'Politics'],
+  [/market|inflation|recession|gdp|currency|stock|trade war|tariff|central bank|opec|oil price/i, 'Economy']
 ];
 
-function parseRss(xml) {
-  const doc = new DOMParser().parseFromString(xml, 'text/xml');
-  if (doc.querySelector('parsererror')) return [];
-  const items = doc.querySelectorAll('item');
-  const out = [];
-  items.forEach(item => {
-    const title = (item.querySelector('title')?.textContent || '').trim();
-    if (title.length < 12) return;
-    const link = (item.querySelector('link')?.textContent || '').trim();
-    if (!link) return;
-    const pubDate = item.querySelector('pubDate')?.textContent || '';
-    const source = (item.querySelector('source')?.textContent || 'Google News').trim();
-    /* Images: <media:content url="..."> or <enclosure url="..."> */
-    let image = null;
-    const media = item.getElementsByTagName('media:content')[0]
-      || item.getElementsByTagName('enclosure')[0];
-    if (media) image = media.getAttribute('url') || null;
-    out.push({
-      title: title.replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim(),
-      url: link,
-      source,
-      time: pubDate ? new Date(pubDate).getTime() : Date.now(),
-      image
-    });
-  });
-  return out;
+function categorize(title) {
+  const t = String(title || '');
+  for (const [re, cat] of CATEGORY_RULES) if (re.test(t)) return cat;
+  return 'World';
 }
 
-async function loadNews() {
-  const seen = new Set();
-  const all = [];
+const CATEGORY_THEME = {
+  Disaster: { emoji: '🌊', c1: '#0ea5e9', c2: '#0c4a6e' },
+  Conflict: { emoji: '⚔️', c1: '#ef4444', c2: '#450a0a' },
+  Health:   { emoji: '🦠', c1: '#22c55e', c2: '#052e16' },
+  Climate:  { emoji: '🌡️', c1: '#f59e0b', c2: '#431407' },
+  Politics: { emoji: '🏛️', c1: '#818cf8', c2: '#1e1b4b' },
+  Economy:  { emoji: '📉', c1: '#eab308', c2: '#422006' },
+  World:    { emoji: '🌍', c1: '#38bdf8', c2: '#0c4a6e' }
+};
 
-  /* Try each feed through the proxy race */
-  for (const feed of FEEDS) {
-    try {
-      const xml = await fetchThroughRace(feed);
-      const items = parseRss(xml);
-      items.forEach(it => {
-        const key = it.title.toLowerCase().slice(0, 60);
-        if (seen.has(key)) return;
-        seen.add(key);
-        all.push(it);
-      });
-      if (all.length >= 30) break;
-    } catch (e) {
-      console.warn('[feed fail]', feed, e.message);
-    }
-  }
-
-  all.sort((a, b) => b.time - a.time);
-
-  if (!all.length) {
-    console.warn('[news] all feeds failed — using fallback list');
-    return FALLBACK_NEWS.map((n, i) => ({ ...n, time: Date.now() - i * 3600000 }));
-  }
-  return all.slice(0, 40);
+function pickTheme(title, category) {
+  return CATEGORY_THEME[category] || CATEGORY_THEME.World;
 }
 
-/* Curated fallback headlines if every feed fails */
-const FALLBACK_NEWS = [
-  { title: 'UN agencies warn of growing humanitarian needs across multiple crisis regions', source: 'UN News', url: 'https://news.un.org/en/', image: null },
-  { title: 'ReliefWeb reports active disasters affecting millions worldwide', source: 'ReliefWeb', url: 'https://reliefweb.int/updates', image: null },
-  { title: 'USGS monitors elevated seismic activity across the Pacific ring of fire', source: 'USGS', url: 'https://earthquake.usgs.gov/earthquakes/map/', image: null },
-  { title: 'International monitors flag escalating conflict in multiple regions', source: 'Reuters', url: 'https://www.reuters.com/world/', image: null },
-  { title: 'Climate scientists report record temperatures across multiple continents', source: 'BBC News', url: 'https://www.bbc.com/news', image: null },
-  { title: 'Health agencies track evolving disease outbreaks in several countries', source: 'WHO', url: 'https://www.who.int/emergencies/disease-outbreak-news', image: null },
-  { title: 'UNHCR updates displacement figures as refugee flows shift across borders', source: 'UNHCR', url: 'https://www.unhcr.org/news', image: null },
-  { title: 'Aid convoys reach conflict-affected areas after negotiated pause', source: 'ICRC', url: 'https://www.icrc.org/en/news', image: null },
-  { title: 'Economists flag supply chain pressures from regional instability', source: 'AP News', url: 'https://apnews.com/hub/world-news', image: null },
-  { title: 'Global monitoring networks track flooding and storm systems in real time', source: 'GDACS', url: 'https://www.gdacs.org/', image: null },
-  { title: 'Diplomatic efforts intensify as regional tensions continue', source: 'Al Jazeera', url: 'https://www.aljazeera.com/', image: null },
-  { title: 'Maritime authorities respond to incidents affecting key shipping routes', source: 'Maritime Executive', url: 'https://www.maritime-executive.com/', image: null }
-];
+function fallbackArtwork(item, w = 640, h = 360) {
+  const theme = pickTheme(item.title, item.category);
+  const label = String(item.category || 'World').toUpperCase();
+  const title = String(item.title || '').slice(0, 56);
+  const escXml = x => String(x).replace(/[<>&'"]/g, c => (
+    { '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]
+  ));
+  const svg =
+`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+<stop stop-color="${theme.c2}"/><stop offset="1" stop-color="${theme.c1}"/>
+</linearGradient></defs>
+<rect width="100%" height="100%" fill="url(#g)"/>
+<text x="${w * 0.07}" y="${h * 0.42}" font-size="${Math.max(44, w * 0.12)}">${theme.emoji}</text>
+<text x="${w * 0.07}" y="${h * 0.66}" fill="#fff" font-family="Arial,sans-serif" font-size="${Math.max(15, w * 0.036)}" font-weight="700" letter-spacing="3">${escXml(label)}</text>
+<text x="${w * 0.07}" y="${h * 0.76}" fill="#fff" opacity="0.85" font-family="Arial,sans-serif" font-size="${Math.max(11, w * 0.022)}">${escXml(title)}</text>
+</svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
 
-/* ═══════════════ USGS EVENTS ═══════════════ */
-async function loadEvents() {
+function imageFor(item, w, h) {
+  return safeImg(item.image) || fallbackArtwork(item, w, h);
+}
+
+function thumbHtml(item) {
+  const theme = pickTheme(item.title, item.category);
+  const src = imageFor(item, 160, 160);
+  return `<span class="thumb" style="--c1:${theme.c1};--c2:${theme.c2}" aria-hidden="true">
+    <span class="thumb-emoji">${theme.emoji}</span>
+    <img src="${esc(src)}" alt="" loading="lazy"
+         onload="this.parentElement.classList.add('has-img')"
+         onerror="this.remove()">
+  </span>`;
+}
+
+function heroHtml(item) {
+  const theme = pickTheme(item.title, item.category);
+  const src = imageFor(item, 800, 450);
+  return `<div class="hero" style="--c1:${theme.c1};--c2:${theme.c2}">
+    <span class="hero-emoji" aria-hidden="true">${theme.emoji}</span>
+    <img src="${esc(src)}" alt=""
+         onload="this.parentElement.classList.add('has-img')"
+         onerror="this.remove()">
+    <span class="hero-caption">${esc(item.category || 'World')}</span>
+  </div>`;
+}
+
+/* ══════════════════ 6. GAZETTEER (compact) ══════════════════ */
+const GAZETTEER = [
+  ['new york', 40.71, -74.01], ['los angeles', 34.05, -118.24], ['london', 51.51, -0.13],
+  ['paris', 48.86, 2.35], ['berlin', 52.52, 13.40], ['madrid', 40.42, -3.70],
+  ['rome', 41.90, 12.50], ['moscow', 55.75, 37.62], ['kyiv', 50.45, 30.52],
+  ['istanbul', 41.01, 28.98], ['tehran', 35.69, 51.39], ['baghdad', 33.31, 44.36],
+  ['damascus', 33.51, 36.29], ['beirut', 33.89, 35.50], ['tel aviv', 32.08, 34.78],
+  ['jerusalem', 31.77, 35.21], ['cairo', 30.04, 31.24], ['riyadh', 24.71, 46.68],
+  ['dubai', 25.20, 55.27], ['kabul', 34.53, 69.17], ['karachi', 24.86, 67.01],
+  ['islamabad', 33.68, 73.05], ['new delhi', 28.61, 77.21], ['mumbai', 19.08, 72.88],
+  ['dhaka', 23.81, 90.41], ['bangkok', 13.76, 100.50], ['jakarta', -6.21, 106.85],
+  ['manila', 14.60, 120.98], ['beijing', 39.90, 116.40], ['shanghai', 31.23, 121.47],
+  ['hong kong', 22.32, 114.17], ['taipei', 25.03, 121.57], ['tokyo', 35.68, 139.69],
+  ['seoul', 37.57, 126.98], ['pyongyang', 39.03, 125.75], ['sydney', -33.87, 151.21],
+  ['melbourne', -37.81, 144.96], ['nairobi', -1.29, 36.82], ['lagos', 6.52, 3.38],
+  ['johannesburg', -26.20, 28.05], ['cape town', -33.92, 18.42], ['cairo', 30.04, 31.24],
+  ['mexico city', 19.43, -99.13], ['sao paulo', -23.55, -46.63], ['buenos aires', -34.60, -58.38],
+  ['bogota', 4.71, -74.07], ['lima', -12.05, -77.04], ['santiago', -33.45, -70.67],
+  ['caracas', 10.48, -66.90], ['havana', 23.11, -82.37], ['toronto', 43.65, -79.38],
+  ['vancouver', 49.28, -123.12], ['chicago', 41.88, -87.63], ['washington', 38.91, -77.04],
+  ['united states', 39.83, -98.58], ['usa', 39.83, -98.58], ['canada', 56.13, -106.35],
+  ['mexico', 23.63, -102.55], ['brazil', -14.24, -51.93], ['argentina', -38.42, -63.62],
+  ['chile', -35.68, -71.54], ['peru', -9.19, -75.02], ['colombia', 4.57, -74.30],
+  ['venezuela', 6.42, -66.59], ['cuba', 21.52, -77.78], ['haiti', 18.97, -72.29],
+  ['united kingdom', 55.38, -3.44], ['france', 46.23, 2.21], ['germany', 51.17, 10.45],
+  ['spain', 40.46, -3.75], ['italy', 41.87, 12.57], ['greece', 39.07, 21.82],
+  ['poland', 51.92, 19.15], ['ukraine', 48.38, 31.17], ['romania', 45.94, 24.97],
+  ['sweden', 60.13, 18.64], ['norway', 60.47, 8.47], ['finland', 61.92, 25.75],
+  ['russia', 61.52, 105.32], ['turkey', 38.96, 35.24], ['china', 35.86, 104.20],
+  ['japan', 36.20, 138.25], ['india', 20.59, 78.96], ['pakistan', 30.38, 69.35],
+  ['bangladesh', 23.68, 90.36], ['nepal', 28.39, 84.12], ['myanmar', 21.91, 95.96],
+  ['thailand', 15.87, 100.99], ['vietnam', 14.06, 108.28], ['malaysia', 4.21, 101.98],
+  ['indonesia', -0.79, 113.92], ['philippines', 12.88, 121.77], ['australia', -25.27, 133.78],
+  ['iran', 32.43, 53.69], ['iraq', 33.22, 43.68], ['syria', 34.80, 38.99],
+  ['lebanon', 33.85, 35.86], ['israel', 31.05, 34.85], ['palestine', 31.95, 35.23],
+  ['jordan', 30.59, 36.24], ['egypt', 26.82, 30.80], ['libya', 26.34, 17.23],
+  ['algeria', 28.03, 1.66], ['morocco', 31.79, -7.09], ['sudan', 12.86, 30.22],
+  ['ethiopia', 9.15, 40.49], ['somalia', 5.15, 46.20], ['kenya', -0.02, 37.91],
+  ['tanzania', -6.37, 34.89], ['uganda', 1.37, 32.29], ['nigeria', 9.08, 8.68],
+  ['ghana', 7.95, -1.02], ['senegal', 14.50, -14.45], ['mali', 17.57, -4.00],
+  ['south africa', -30.56, 22.94], ['yemen', 15.55, 48.52], ['qatar', 25.35, 51.18],
+  ['kuwait', 29.31, 47.48], ['iceland', 64.96, -19.02]
+].sort((a, b) => b[0].length - a[0].length);
+
+function locate(text) {
+  if (!text) return null;
+  const hay = ' ' + String(text).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  for (const [name, lat, lon] of GAZETTEER) {
+    if (hay.includes(' ' + name + ' ')) return { lat, lon, name };
+  }
+  return null;
+}
+
+/* ══════════════════ 7. EVENT MODEL ══════════════════ */
+function reliabilityOf(sourceName) {
+  const key = String(sourceName || '').toLowerCase().trim();
+  if (RELIABILITY[key] != null) return RELIABILITY[key];
+  for (const [k, v] of Object.entries(RELIABILITY)) {
+    if (key.includes(k)) return v;
+  }
+  return DEFAULT_RELIABILITY;
+}
+
+function severityFromMagnitude(mag) {
+  if (mag >= 6.5) return 'critical';
+  if (mag >= 5.5) return 'high';
+  if (mag >= 4.5) return 'medium';
+  return 'low';
+}
+
+function severityFromCategory(category, corroboration) {
+  const base = { Conflict: 'high', Disaster: 'high', Health: 'medium', Climate: 'medium',
+    Politics: 'low', Economy: 'low', World: 'low' }[category] || 'low';
+  if (corroboration >= 3) {
+    if (base === 'high') return 'critical';
+    if (base === 'medium') return 'high';
+    if (base === 'low') return 'medium';
+  }
+  return base;
+}
+
+function computeConfidence(sources, hasGeo) {
+  const base = Math.max(...sources.map(reliabilityOf), DEFAULT_RELIABILITY);
+  const corroboration = clamp((sources.length - 1) * 0.07, 0, 0.20);
+  const geo = hasGeo ? 0.08 : 0;
+  return clamp(base * 0.75 + corroboration + geo, 0.10, 1.00);
+}
+
+function fingerprint(title, category) {
+  const normalised = String(title || '').toLowerCase()
+    .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim()
+    .split(' ').slice(0, 10).join(' ');
+  return hashStr(normalised + '|' + category);
+}
+
+/* ══════════════════ 8. INGESTORS ══════════════════ */
+async function ingestUSGS() {
+  markSource('usgs', 'loading', 0);
   try {
     const xml = await fetchThroughRace(
       'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson'
     );
     const data = JSON.parse(xml);
-    return (data.features || []).map(f => {
+    const features = Array.isArray(data.features) ? data.features : [];
+    const events = features.map(f => {
       const c = f.geometry?.coordinates || [];
       const mag = Number(f.properties?.mag) || 0;
+      const source = 'USGS';
+      const hasGeo = c.length >= 2 && Number.isFinite(c[0]) && Number.isFinite(c[1]);
       return {
-        id: 'usgs-' + f.id,
+        id: 'usgs-' + (f.id || hashStr(f.properties?.title || String(Math.random()))),
         title: f.properties?.title || `M${mag.toFixed(1)} earthquake`,
-        severity: mag >= 6.5 ? 'critical' : mag >= 5.5 ? 'high' : mag >= 4.5 ? 'medium' : 'low',
+        category: 'Disaster',
+        severity: severityFromMagnitude(mag),
+        confidence: computeConfidence([source], hasGeo),
         time: Number(f.properties?.time) || Date.now(),
-        lat: c[1] ?? null, lon: c[0] ?? null,
+        lat: hasGeo ? c[1] : null,
+        lon: hasGeo ? c[0] : null,
         place: f.properties?.place || null,
-        source: 'USGS',
-        url: f.properties?.url || null
+        source, sources: [source],
+        url: safeUrl(f.properties?.url),
+        image: null, tone: null,
+        meta: {
+          magnitude: mag,
+          depthKm: c.length > 2 ? Math.round(c[2]) : null,
+          tsunami: f.properties?.tsunami === 1
+        }
       };
     });
-  } catch (e) {
-    console.warn('[usgs fail]', e.message);
+    markSource('usgs', 'ok', events.length);
+    return events;
+  } catch (err) {
+    markSource('usgs', 'error', 0, err.message);
     return [];
   }
 }
 
-/* ═══════════════ JINA READER — full article text ═══════════════
-   r.jina.ai is a free service that runs a headless browser
-   and returns clean article text. No CORS problem because it's
-   a public service that returns CORS headers. */
-async function fetchArticleViaJina(url) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20000);
+async function ingestReliefWeb() {
+  markSource('reliefweb', 'loading', 0);
   try {
-    const res = await fetch('https://r.jina.ai/' + url, {
-      signal: ctrl.signal,
-      headers: { 'Accept': 'text/plain' }
+    const xml = await fetchThroughRace(
+      'https://api.reliefweb.int/v1/disasters?appname=gcms-core-x&limit=20&profile=full&preset=latest&fields[include]=name,country,date,status,type,url'
+    );
+    const data = JSON.parse(xml);
+    const rows = Array.isArray(data.data) ? data.data : [];
+    const events = rows.map(d => {
+      const f = d.fields || {};
+      const country = f.country?.[0]?.name || null;
+      const loc = locate(country);
+      const source = 'ReliefWeb';
+      const title = f.name || 'Disaster';
+      return {
+        id: 'rw-' + (d.id || hashStr(title)),
+        title, category: 'Disaster',
+        severity: severityFromCategory('Disaster', 2),
+        confidence: computeConfidence([source], !!loc),
+        time: f.date?.created ? new Date(f.date.created).getTime() : Date.now(),
+        lat: loc ? loc.lat : null,
+        lon: loc ? loc.lon : null,
+        place: country,
+        source, sources: [source],
+        url: safeUrl(f.url),
+        image: null, tone: null,
+        meta: { disasterType: f.type?.[0]?.name || 'Crisis', status: f.status || 'ongoing', country }
+      };
     });
+    markSource('reliefweb', 'ok', events.length);
+    return events;
+  } catch (err) {
+    markSource('reliefweb', 'error', 0, err.message);
+    return [];
+  }
+}
+
+async function ingestGDELT() {
+  markSource('gdelt', 'loading', 0);
+  try {
+    const xml = await fetchThroughRace(
+      'https://api.gdeltproject.org/api/v2/geo/geo?query=conflict&format=GeoJSON&timespan=1d'
+    );
+    const data = JSON.parse(xml);
+    const features = Array.isArray(data.features) ? data.features : [];
+    const events = features
+      .filter(f => Array.isArray(f.geometry?.coordinates) && f.geometry.coordinates.length >= 2)
+      .slice(0, 40)
+      .map(f => {
+        const [lon, lat] = f.geometry.coordinates;
+        const title = f.properties?.name || 'Conflict incident';
+        const source = 'GDELT';
+        return {
+          id: 'gdelt-' + hashStr(title + lat + lon),
+          title, category: 'Conflict',
+          severity: severityFromCategory('Conflict', 1),
+          confidence: computeConfidence([source], true),
+          time: Date.now(),
+          lat, lon,
+          place: f.properties?.name || null,
+          source, sources: [source],
+          url: safeUrl(f.properties?.url),
+          image: null, tone: null,
+          meta: { count: f.properties?.count || null }
+        };
+      });
+    markSource('gdelt', 'ok', events.length);
+    return events;
+  } catch (err) {
+    markSource('gdelt', 'error', 0, err.message);
+    return [];
+  }
+}
+
+function parseGdeltDate(s) {
+  if (!s || String(s).length < 8) return new Date();
+  const str = String(s);
+  const y = +str.slice(0, 4), mo = +str.slice(4, 6) - 1, d = +str.slice(6, 8);
+  const h = str.length >= 10 ? +str.slice(8, 10) : 0;
+  const mi = str.length >= 12 ? +str.slice(10, 12) : 0;
+  return new Date(Date.UTC(y, mo, d, h, mi));
+}
+
+const FALLBACK_NEWS = [
+  { title: 'UN agencies warn of growing humanitarian needs across multiple crisis regions', source: 'UN News', url: 'https://news.un.org/en/', image: null, tone: null, sourcecountry: null },
+  { title: 'ReliefWeb reports active disasters affecting millions worldwide', source: 'ReliefWeb', url: 'https://reliefweb.int/updates', image: null, tone: null, sourcecountry: null },
+  { title: 'USGS monitors elevated seismic activity across the Pacific ring of fire', source: 'USGS', url: 'https://earthquake.usgs.gov/earthquakes/map/', image: null, tone: null, sourcecountry: null },
+  { title: 'International monitors flag escalating conflict in multiple regions', source: 'Reuters', url: 'https://www.reuters.com/world/', image: null, tone: null, sourcecountry: null },
+  { title: 'Climate scientists report record temperatures across multiple continents', source: 'BBC News', url: 'https://www.bbc.com/news', image: null, tone: null, sourcecountry: null },
+  { title: 'Health agencies track evolving disease outbreaks in several countries', source: 'WHO', url: 'https://www.who.int/emergencies/disease-outbreak-news', image: null, tone: null, sourcecountry: null },
+  { title: 'UNHCR updates displacement figures as refugee flows shift across borders', source: 'UNHCR', url: 'https://www.unhcr.org/news', image: null, tone: null, sourcecountry: null },
+  { title: 'Aid convoys reach conflict-affected areas after negotiated pause', source: 'ICRC', url: 'https://www.icrc.org/en/news', image: null, tone: null, sourcecountry: null },
+  { title: 'Economists flag supply chain pressures from regional instability', source: 'AP News', url: 'https://apnews.com/hub/world-news', image: null, tone: null, sourcecountry: null },
+  { title: 'Global monitoring networks track flooding and storm systems in real time', source: 'GDACS', url: 'https://www.gdacs.org/', image: null, tone: null, sourcecountry: null },
+  { title: 'Diplomatic efforts intensify as regional tensions continue', source: 'Al Jazeera', url: 'https://www.aljazeera.com/', image: null, tone: null, sourcecountry: null },
+  { title: 'Maritime authorities respond to incidents affecting key shipping routes', source: 'Maritime Executive', url: 'https://www.maritime-executive.com/', image: null, tone: null, sourcecountry: null }
+];
+
+async function ingestNews() {
+  markSource('news', 'loading', 0);
+  const collected = [];
+
+  /* GDELT article queries */
+  const queries = [
+    '(conflict OR war OR airstrike OR ceasefire OR missile) sourcelang:english',
+    '(earthquake OR flood OR hurricane OR wildfire OR tsunami) sourcelang:english',
+    '(humanitarian OR displacement OR refugee OR crisis) sourcelang:english'
+  ];
+  for (const q of queries) {
+    try {
+      const xml = await fetchThroughRace(
+        'https://api.gdeltproject.org/api/v2/doc/doc?query=' +
+        encodeURIComponent(q) +
+        '&mode=artlist&maxrecords=30&timespan=1d&sort=hybridrel&format=json'
+      );
+      const data = JSON.parse(xml);
+      (data.articles || []).forEach(a => {
+        if (!a.title || !a.url) return;
+        collected.push({
+          title: a.title, source: a.domain || 'GDELT',
+          time: parseGdeltDate(a.seendate),
+          url: a.url, image: a.socialimage || null,
+          tone: a.tone != null ? parseFloat(a.tone) : null
+        });
+      });
+    } catch (e) { console.log('[gdelt news]', e.message); }
+  }
+
+  /* Google News RSS */
+  const feeds = [
+    'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',
+    'https://news.google.com/rss/search?q=conflict+OR+earthquake+OR+flood+OR+war&hl=en-US&gl=US&ceid=US:en'
+  ];
+  for (const feed of feeds) {
+    try {
+      const xml = await fetchThroughRace(feed);
+      const doc = new DOMParser().parseFromString(xml, 'text/xml');
+      if (doc.querySelector('parsererror')) continue;
+      doc.querySelectorAll('item').forEach(item => {
+        const title = (item.querySelector('title')?.textContent || '').trim();
+        if (title.length < 12) return;
+        const src = item.querySelector('source')?.textContent;
+        let image = null;
+        const media = item.getElementsByTagName('media:content')[0]
+          || item.getElementsByTagName('enclosure')[0];
+        if (media) image = media.getAttribute('url') || null;
+        collected.push({
+          title, source: src || 'Google News',
+          time: new Date(item.querySelector('pubDate')?.textContent || Date.now()),
+          url: item.querySelector('link')?.textContent || '',
+          image, tone: null
+        });
+      });
+    } catch (e) { console.log('[gnews]', e.message); }
+  }
+
+  /* Fallback if everything failed */
+  if (!collected.length) {
+    console.warn('[news] all live sources failed — using FALLBACK_NEWS');
+    markSource('news', 'error', FALLBACK_NEWS.length, 'fallback in use');
+    const now = Date.now();
+    return FALLBACK_NEWS.map((n, i) => normaliseNewsItem(n, now - i * 3600000));
+  }
+
+  /* Normalise + dedupe */
+  const seen = new Set();
+  const items = [];
+  for (const raw of collected) {
+    const title = String(raw.title || '').trim();
+    if (title.length < 14) continue;
+    if (/advertisement|sponsored|subscribe now/i.test(title)) continue;
+    const fp = fingerprint(title, categorize(title));
+    if (seen.has(fp)) continue;
+    seen.add(fp);
+    items.push(normaliseNewsItem(raw));
+  }
+  items.sort((a, b) => b.time - a.time);
+  const capped = items.slice(0, CONFIG.maxNews);
+  markSource('news', 'ok', capped.length);
+  return capped;
+}
+
+function normaliseNewsItem(raw, forcedTime) {
+  const title = String(raw.title || '').trim();
+  const category = categorize(title);
+  const loc = locate(title);
+  const source = raw.source || 'News';
+  const hasGeo = !!(loc && Number.isFinite(loc.lat));
+  return {
+    id: 'news-' + fingerprint(title, category),
+    title, category,
+    severity: severityFromCategory(category, 1),
+    confidence: computeConfidence([source], hasGeo),
+    time: forcedTime || new Date(raw.time).getTime() || Date.now(),
+    lat: hasGeo ? loc.lat : null,
+    lon: hasGeo ? loc.lon : null,
+    place: loc ? loc.name : null,
+    source, sources: [source],
+    url: safeUrl(raw.url),
+    image: safeImg(raw.image) || null,
+    tone: Number.isFinite(raw.tone) ? raw.tone : null,
+    meta: {}
+  };
+}
+
+async function ingestSocial() {
+  markSource('social', 'loading', 0);
+  try {
+    const xml = await fetchThroughRace(
+      'https://www.reddit.com/r/worldnews/.rss'
+    );
+    const doc = new DOMParser().parseFromString(xml, 'text/xml');
+    if (doc.querySelector('parsererror')) throw new Error('parse fail');
+    const posts = Array.from(doc.querySelectorAll('entry')).slice(0, 6).map(e => ({
+      author: String(e.querySelector('name')?.textContent || 'reddit').slice(0, 40),
+      title: String(e.querySelector('title')?.textContent || '').slice(0, 200),
+      time: new Date(e.querySelector('updated')?.textContent || Date.now()).getTime()
+    }));
+    markSource('social', 'ok', posts.length);
+    return posts;
+  } catch (err) {
+    markSource('social', 'error', 0, err.message);
+    return [];
+  }
+}
+
+/* ══════════════════ 9. MERGE ══════════════════ */
+function jaccard(a, b) {
+  const tok = s => new Set(String(s).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 3));
+  const A = tok(a), B = tok(b);
+  if (!A.size || !B.size) return 0;
+  let inter = 0;
+  for (const w of A) if (B.has(w)) inter++;
+  return inter / (A.size + B.size - inter);
+}
+
+function mergeEvents(all) {
+  const byFp = new Map();
+  const order = { low: 0, medium: 1, high: 2, critical: 3 };
+  for (const ev of all) {
+    const key = fingerprint(ev.title, ev.category);
+    const existing = byFp.get(key);
+    if (!existing) {
+      byFp.set(key, { ...ev, sources: [...new Set(ev.sources)] });
+      continue;
+    }
+    const sources = [...new Set([...existing.sources, ...ev.sources])];
+    const merged = {
+      ...existing,
+      time: Math.max(existing.time, ev.time),
+      sources,
+      confidence: computeConfidence(sources, existing.lat != null || ev.lat != null),
+      severity: severityFromCategory(existing.category, sources.length),
+      url: existing.url !== '#' ? existing.url : ev.url,
+      image: existing.image || ev.image
+    };
+    if (order[ev.severity] > order[merged.severity]) merged.severity = ev.severity;
+    byFp.set(key, merged);
+  }
+  const out = [];
+  for (const ev of byFp.values()) {
+    const twin = out.find(o =>
+      o.category === ev.category && o.lat != null && ev.lat != null &&
+      Math.abs(o.lat - ev.lat) < 0.6 && Math.abs(o.lon - ev.lon) < 0.6 &&
+      jaccard(o.title, ev.title) > 0.55
+    );
+    if (twin) {
+      twin.sources = [...new Set([...twin.sources, ...ev.sources])];
+      twin.confidence = computeConfidence(twin.sources, true);
+      twin.time = Math.max(twin.time, ev.time);
+      if (order[ev.severity] > order[twin.severity]) twin.severity = ev.severity;
+    } else out.push(ev);
+  }
+  return out;
+}
+
+/* ══════════════════ 10. ANALYTICS ══════════════════ */
+const SEVERITY_WEIGHT = { critical: 10, high: 6, medium: 3, low: 1 };
+
+function computeCrisisIndex(events) {
+  if (!events.length) return 0;
+  const now = Date.now();
+  let raw = 0;
+  for (const ev of events) {
+    const ageHours = Math.max(0, (now - ev.time) / 3600000);
+    const decay = Math.exp(-ageHours / 48);
+    const weight = SEVERITY_WEIGHT[ev.severity] || 1;
+    raw += weight * decay * (0.5 + 0.5 * ev.confidence);
+  }
+  return Math.round(100 * (1 - Math.exp(-raw / 60)));
+}
+
+function meanConfidence(events) {
+  if (!events.length) return 0;
+  return events.reduce((a, e) => a + e.confidence, 0) / events.length;
+}
+
+function computeTrend(events, days = 7) {
+  const buckets = Array.from({ length: days }, () => ({ critical: 0, high: 0, medium: 0, low: 0 }));
+  const end = new Date(); end.setHours(23, 59, 59, 999);
+  const endMs = end.getTime();
+  for (const ev of events) {
+    const i = Math.floor((endMs - ev.time) / DAY_MS);
+    if (i < 0 || i >= days) continue;
+    const b = buckets[days - 1 - i];
+    if (b && b[ev.severity] != null) b[ev.severity]++;
+  }
+  return buckets;
+}
+
+function trendLabels(days = 7) {
+  const out = [];
+  const now = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    out.push(new Date(now.getTime() - i * DAY_MS).toLocaleDateString(undefined, { weekday: 'short' }));
+  }
+  return out;
+}
+
+/* ══════════════════ 11. STATE ══════════════════ */
+const state = {
+  events: [], news: [], social: [],
+  timelineDays: 7,
+  newsCategory: 'All', newsSearch: '',
+  is3D: true, storyMode: false,
+  trendChart: null, storyTrendChart: null
+};
+
+function visibleEvents() {
+  const cutoff = Date.now() - state.timelineDays * DAY_MS;
+  return state.events.filter(e => e.time >= cutoff).sort((a, b) => b.time - a.time);
+}
+
+function visibleNews() {
+  const q = state.newsSearch.trim().toLowerCase();
+  return state.news
+    .filter(n => state.newsCategory === 'All' || n.category === state.newsCategory)
+    .filter(n => !q || n.title.toLowerCase().includes(q));
+}
+
+/* ══════════════════ 12. TOASTS ══════════════════ */
+function showToast(title, subtitle, severity = 'medium', ttl = 7000) {
+  const container = $('toast-container'); if (!container) return;
+  const colors = { critical: 'var(--critical)', high: 'var(--high)', medium: 'var(--medium)', low: 'var(--low)' };
+  const icons = { critical: '🚨', high: '⚠️', medium: '📢', low: 'ℹ️' };
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.style.borderLeftColor = colors[severity] || colors.medium;
+  toast.innerHTML = `
+    <div class="toast-head">
+      <span aria-hidden="true">${icons[severity] || 'ℹ️'}</span>
+      <span class="toast-label" style="color:${colors[severity] || colors.medium}">${esc(severity)}</span>
+    </div>
+    <div class="toast-title">${esc(title)}</div>
+    ${subtitle ? `<div class="toast-meta">${esc(subtitle)}</div>` : ''}
+  `;
+  toast.setAttribute('role', 'button');
+  toast.setAttribute('tabindex', '0');
+  const dismiss = () => {
+    toast.classList.add('removing');
+    setTimeout(() => toast.remove(), 350);
+  };
+  toast.addEventListener('click', dismiss);
+  toast.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dismiss(); }
+  });
+  container.appendChild(toast);
+  setTimeout(dismiss, ttl);
+}
+
+/* ══════════════════ 13. MODAL ══════════════════ */
+const Modal = (() => {
+  const stack = [];
+  function open(id, openerEl) {
+    const overlay = $(id);
+    if (!overlay || overlay.classList.contains('active')) return;
+    overlay.__opener = openerEl || document.activeElement;
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    stack.push(overlay);
+    const focusables = overlay.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (focusables[0]) setTimeout(() => focusables[0].focus(), 40);
+  }
+  function close(id) {
+    const overlay = typeof id === 'string' ? $(id) : id;
+    if (!overlay || !overlay.classList.contains('active')) return;
+    overlay.classList.remove('active');
+    const idx = stack.indexOf(overlay);
+    if (idx > -1) stack.splice(idx, 1);
+    if (!stack.length) document.body.style.overflow = '';
+    if (overlay.__opener && typeof overlay.__opener.focus === 'function') overlay.__opener.focus();
+  }
+  function closeAll() { [...stack].forEach(close); }
+  return { open, close, closeAll };
+})();
+
+document.addEventListener('click', e => {
+  const closeBtn = e.target.closest('[data-close]');
+  if (closeBtn) { Modal.close(closeBtn.closest('.modal-overlay')); return; }
+  if (e.target.classList.contains('modal-overlay')) Modal.close(e.target);
+});
+
+/* ══════════════════ 14. RENDER ══════════════════ */
+function severityBadge(sev) {
+  return `<span class="badge badge-${esc(sev)}">${esc(sev)}</span>`;
+}
+
+function eventItemHtml(event, index) {
+  const place = event.place ? ` · ${esc(event.place)}` : '';
+  return `<button class="item ${esc(event.severity)}" type="button" data-event-index="${index}">
+    <span class="item-main">
+      <span class="item-top">
+        <span class="item-title">${esc(event.title)}</span>
+        ${severityBadge(event.severity)}
+      </span>
+      <span class="item-meta">
+        <span>${esc(event.source)}</span><span>·</span>
+        <span>${timeAgo(event.time)}</span><span>·</span>
+        <span>${Math.round(event.confidence * 100)}% conf</span>${place}
+      </span>
+    </span>
+  </button>`;
+}
+
+function newsItemHtml(article, index) {
+  return `<button class="item" type="button" data-news-index="${index}">
+    ${thumbHtml(article)}
+    <span class="item-main">
+      <span class="item-top">
+        <span class="item-title">${esc(article.title)}</span>
+        <span class="badge-cat">${esc(article.category)}</span>
+      </span>
+      <span class="item-meta">
+        <span>${esc(article.source)}</span><span>·</span>
+        <span>${timeAgo(article.time)}</span><span>·</span>
+        <span>${Math.round(article.confidence * 100)}%</span>
+      </span>
+    </span>
+  </button>`;
+}
+
+function renderStats() {
+  const events = visibleEvents();
+  const highCritical = events.filter(e => e.severity === 'critical' || e.severity === 'high');
+  const confidence = meanConfidence(events);
+  const index = computeCrisisIndex(events);
+  const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  setText('stat-active', events.length);
+  setText('stat-alerts', highCritical.length);
+  setText('stat-confidence', events.length ? `${Math.round(confidence * 100)}%` : '—');
+  setText('stat-score', events.length ? index : '—');
+  setText('story-events', events.length);
+  setText('story-critical', events.filter(e => e.severity === 'critical').length);
+  setText('story-high', events.filter(e => e.severity === 'high').length);
+  setText('story-confidence', events.length ? `${Math.round(confidence * 100)}%` : '—');
+  const evCount = $('ev-count'); if (evCount) evCount.textContent = String(events.length);
+  const alCount = $('al-count'); if (alCount) alCount.textContent = String(highCritical.length);
+}
+
+function renderEventList() {
+  const container = $('event-list'); if (!container) return;
+  const events = visibleEvents().slice(0, 12);
+  if (!events.length) {
+    const anyError = Object.values(SOURCES).some(s => s.status === 'error');
+    container.innerHTML = `<div class="empty ${anyError ? 'error' : ''}">
+      ${anyError ? '⚠ Some data sources could not be reached.' : '◌ No events in the selected window.'}
+    </div>`;
+    return;
+  }
+  container.innerHTML = events.map(eventItemHtml).join('');
+}
+
+function renderAlertList() {
+  const container = $('alert-list'); if (!container) return;
+  const all = visibleEvents();
+  const alerts = all.filter(e => e.severity === 'critical' || e.severity === 'high').slice(0, 8);
+  if (!alerts.length) {
+    container.innerHTML = `<div class="empty">◌ No critical alerts.</div>`;
+    return;
+  }
+  container.innerHTML = alerts.map(a => eventItemHtml(a, all.indexOf(a))).join('');
+}
+
+function renderNewsChips() {
+  const wrap = $('news-chips'); if (!wrap) return;
+  const cats = ['All', 'Conflict', 'Disaster', 'Health', 'Climate', 'Politics', 'Economy', 'World']
+    .filter(c => c === 'All' || state.news.some(n => n.category === c));
+  wrap.innerHTML = cats.map(c => `
+    <button type="button" class="btn btn-sm ${state.newsCategory === c ? 'btn-active' : ''}"
+            data-news-cat="${esc(c)}" aria-pressed="${state.newsCategory === c}">${esc(c)}</button>
+  `).join('');
+}
+
+function renderNewsFeed() {
+  const container = $('news-feed'); if (!container) return;
+  if (!state.news.length) {
+    container.innerHTML = `<div class="empty error">⚠ No headlines.<br>Press ⟳ to retry.</div>`;
+    return;
+  }
+  const items = visibleNews().slice(0, 25);
+  if (!items.length) {
+    container.innerHTML = `<div class="empty">◌ No headlines match this filter.</div>`;
+    return;
+  }
+  container.innerHTML = items.map(newsItemHtml).join('');
+}
+
+function renderStoryNews() {
+  const container = $('story-news-feed'); if (!container) return;
+  if (!state.news.length) {
+    container.innerHTML = `<div class="empty">◌ No headlines loaded.</div>`;
+    return;
+  }
+  container.innerHTML = state.news.slice(0, 5).map(newsItemHtml).join('');
+}
+
+function renderSocialFeed() {
+  const container = $('social-feed'); if (!container) return;
+  if (!state.social.length) {
+    container.innerHTML = `<div class="empty">◌ Social feed unavailable.</div>`;
+    return;
+  }
+  container.innerHTML = state.social.map(p => `
+    <div class="source-row">
+      <span class="source-dot" data-status="live"></span>
+      <span class="source-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.title)}</span>
+    </div>
+  `).join('');
+}
+
+function renderTrendCharts() {
+  if (typeof Chart === 'undefined') return;
+  const events = visibleEvents();
+  const buckets = computeTrend(events, 7);
+  const labels = trendLabels(7);
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  const tickColor = isLight ? '#475569' : '#7a8aa3';
+  const gridColor = isLight ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.06)';
+
+  const datasets = [
+    { label: 'Critical', key: 'critical', color: '#ef4444' },
+    { label: 'High', key: 'high', color: '#fb923c' },
+    { label: 'Medium', key: 'medium', color: '#fbbf24' },
+    { label: 'Low', key: 'low', color: '#4ade80' }
+  ].map(d => ({
+    label: d.label, data: buckets.map(b => b[d.key]),
+    backgroundColor: d.color + 'b3', borderColor: d.color,
+    borderWidth: 1, borderRadius: 3
+  }));
+
+  const baseOptions = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: tickColor, font: { size: 11 }, boxWidth: 12 } },
+      tooltip: { mode: 'index', intersect: false }
+    },
+    scales: {
+      x: { stacked: true, ticks: { color: tickColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { stacked: true, beginAtZero: true, ticks: { color: tickColor, font: { size: 10 }, precision: 0 }, grid: { color: gridColor } }
+    }
+  };
+
+  const mainCanvas = $('trend-chart');
+  if (mainCanvas) {
+    if (state.trendChart) state.trendChart.destroy();
+    state.trendChart = new Chart(mainCanvas.getContext('2d'), {
+      type: 'bar', data: { labels, datasets }, options: baseOptions
+    });
+  }
+  const storyCanvas = $('story-trend-chart');
+  if (storyCanvas) {
+    if (state.storyTrendChart) state.storyTrendChart.destroy();
+    state.storyTrendChart = new Chart(storyCanvas.getContext('2d'), {
+      type: 'bar', data: { labels, datasets }, options: baseOptions
+    });
+  }
+}
+
+function renderStoryStats() {
+  const disasters = state.events.filter(e => e.id.startsWith('rw-'));
+  const countries = new Set(disasters.map(d => d.place).filter(Boolean));
+  const sources = new Set(state.events.flatMap(e => e.sources));
+  const setText = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  setText('story-disasters', disasters.length);
+  setText('story-countries', countries.size);
+  setText('story-sources', sources.size);
+  const note = $('story-humanitarian-note');
+  if (note) {
+    note.textContent = disasters.length
+      ? `Derived from ${disasters.length} ReliefWeb disaster records across ${countries.size} countries.`
+      : 'ReliefWeb disaster feed returned no records.';
+  }
+}
+
+function renderAll() {
+  renderStats(); renderEventList(); renderAlertList();
+  renderNewsChips(); renderNewsFeed(); renderStoryNews();
+  renderSocialFeed(); renderTrendCharts(); renderStoryStats();
+  syncCesiumEntities();
+  syncLeafletMarkers();
+}
+
+/* ══════════════════ 15. THREE.JS LOADER GLOBE ══════════════════ */
+function createThreeLoader(canvas, accentHex = '#818cf8') {
+  if (!canvas || typeof THREE === 'undefined') return null;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
+  camera.position.z = 5.6;
+
+  const wire = new THREE.LineSegments(
+    new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(2, 2)),
+    new THREE.LineBasicMaterial({ color: accentHex, transparent: true, opacity: 0.42 })
+  );
+  scene.add(wire);
+
+  const coreMat = new THREE.MeshBasicMaterial({
+    color: accentHex, wireframe: true, transparent: true, opacity: 0.13
+  });
+  scene.add(new THREE.Mesh(new THREE.IcosahedronGeometry(1.9, 1), coreMat));
+
+  const pPos = new Float32Array(1400 * 3);
+  for (let i = 0; i < pPos.length; i++) pPos[i] = (Math.random() - 0.5) * 16;
+  const particles = new THREE.Points(
+    new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pPos, 3)),
+    new THREE.PointsMaterial({ size: 0.028, color: accentHex, transparent: true, opacity: 0.55 })
+  );
+  scene.add(particles);
+
+  let running = false, raf = null;
+  function resize() {
+    const w = canvas.clientWidth || window.innerWidth;
+    const h = canvas.clientHeight || window.innerHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  function frame() {
+    if (!running) return;
+    wire.rotation.y += 0.004; wire.rotation.x += 0.0015;
+    particles.rotation.y += 0.0006;
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(frame);
+  }
+  return {
+    start() { if (running) return; running = true; resize(); frame(); },
+    stop() { running = false; if (raf) cancelAnimationFrame(raf); raf = null; },
+    resize,
+    setAccent(hex) {
+      wire.material.color.set(hex);
+      coreMat.color.set(hex);
+      particles.material.color.set(hex);
+    }
+  };
+}
+
+/* ══════════════════ 16. THREE.JS CINEMATIC EARTH ══════════════════ */
+function createThreeCinematic(canvas) {
+  if (!canvas || typeof THREE === 'undefined') return null;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+  if (THREE.ACESFilmicToneMapping !== undefined) {
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+  }
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
+  camera.position.set(0, 0.9, 3.1);
+  camera.lookAt(0, 0, 0);
+
+  const sPos = new Float32Array(1800 * 3);
+  for (let i = 0; i < sPos.length; i++) sPos[i] = (Math.random() - 0.5) * 200;
+  scene.add(new THREE.Points(
+    new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(sPos, 3)),
+    new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0.65 })
+  ));
+
+  const earthGroup = new THREE.Group();
+  scene.add(earthGroup);
+
+  const earthMat = new THREE.MeshPhongMaterial({
+    color: 0x1b2a4a,
+    specular: new THREE.Color(0x0a0a12),
+    shininess: 8,
+    emissive: new THREE.Color(0x060a18),
+    emissiveIntensity: 0.30
+  });
+  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), earthMat));
+
+  const textureLoader = new THREE.TextureLoader();
+  if (textureLoader.setCrossOrigin) textureLoader.setCrossOrigin('anonymous');
+
+  const EARTH_TEXTURE_URLS = [
+    'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
+    'https://unpkg.com/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
+    'https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/textures/planets/earth_atmos_2048.jpg'
+  ];
+
+  let urlIdx = 0;
+  function loadEarthTexture(url) {
+    console.log('[earth] loading', url);
+    textureLoader.load(url,
+      tex => {
+        console.log('[earth] ✓', url);
+        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
+        tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1);
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        earthMat.map = tex;
+        earthMat.color.set(0xffffff);
+        earthMat.emissive.set(0x000000);
+        earthMat.emissiveIntensity = 0;
+        earthMat.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        urlIdx++;
+        if (urlIdx < EARTH_TEXTURE_URLS.length) loadEarthTexture(EARTH_TEXTURE_URLS[urlIdx]);
+        else console.warn('[earth] all texture CDNs failed');
+      }
+    );
+  }
+  loadEarthTexture(EARTH_TEXTURE_URLS[0]);
+
+  const atmoMat = new THREE.MeshPhongMaterial({
+    color: 0x4f6dff, transparent: true, opacity: 0.08,
+    side: THREE.BackSide, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1.045, 48, 48), atmoMat));
+
+  scene.add(new THREE.AmbientLight(0x2a3358, 0.55));
+  const key = new THREE.DirectionalLight(0xffffff, 1.35);
+  key.position.set(5, 3, 5); scene.add(key);
+  const rim = new THREE.DirectionalLight(0x818cf8, 0.45);
+  rim.position.set(-5, -1, -4); scene.add(rim);
+
+  const markerGroup = new THREE.Group();
+  earthGroup.add(markerGroup);
+
+  function latLonToVec(lat, lon, r) {
+    const phi = (90 - lat) * Math.PI / 180;
+    const theta = (lon + 180) * Math.PI / 180;
+    return new THREE.Vector3(
+      -r * Math.sin(phi) * Math.cos(theta),
+       r * Math.cos(phi),
+       r * Math.sin(phi) * Math.sin(theta)
+    );
+  }
+
+  function setMarkers(points) {
+    while (markerGroup.children.length) {
+      const c = markerGroup.children.pop();
+      c.geometry?.dispose?.(); c.material?.dispose?.();
+    }
+    points.forEach(p => {
+      const pos = latLonToVec(p.lat, p.lon, 1.01);
+      const size = p.size || 0.018;
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(size, 8, 8),
+        new THREE.MeshBasicMaterial({ color: p.color || 0xff4444 })
+      );
+      dot.position.copy(pos);
+      markerGroup.add(dot);
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(size * 1.6, size * 2.6, 20),
+        new THREE.MeshBasicMaterial({
+          color: p.color || 0xff4444, transparent: true, opacity: 0.55,
+          side: THREE.DoubleSide, depthWrite: false
+        })
+      );
+      ring.position.copy(pos);
+      ring.lookAt(0, 0, 0);
+      markerGroup.add(ring);
+    });
+  }
+
+  let running = false, raf = null;
+  function resize() {
+    const w = canvas.clientWidth || window.innerWidth;
+    const h = canvas.clientHeight || window.innerHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  function frame() {
+    if (!running) return;
+    earthGroup.rotation.y += 0.0016;
+    markerGroup.children.forEach((m, i) => {
+      if (m.geometry && m.geometry.type === 'RingGeometry') {
+        const s = 0.85 + 0.3 * Math.sin(performance.now() * 0.003 + i);
+        m.scale.setScalar(s);
+        m.material.opacity = 0.35 + 0.35 * (s - 0.55);
+      }
+    });
+    renderer.render(scene, camera);
+    raf = requestAnimationFrame(frame);
+  }
+  return {
+    start() { if (running) return; running = true; resize(); frame(); },
+    stop() { running = false; if (raf) cancelAnimationFrame(raf); raf = null; },
+    resize, setMarkers
+  };
+}
+
+/* ══════════════════ 17. CESIUM 3D ══════════════════ */
+let cesiumViewer = null;
+let cesiumLoadPromise = null;
+
+function loadCesium() {
+  if (cesiumLoadPromise) return cesiumLoadPromise;
+  cesiumLoadPromise = new Promise((resolve, reject) => {
+    const base = `https://cdn.jsdelivr.net/npm/cesium@${CONFIG.cesiumVersion}/Build/Cesium/`;
+    window.CESIUM_BASE_URL = base;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = base + 'Widgets/widgets.css';
+    document.head.appendChild(link);
+    const script = document.createElement('script');
+    script.src = base + 'Cesium.js';
+    script.async = true;
+    script.onload = () => window.Cesium ? resolve(window.Cesium) : reject(new Error('Cesium missing'));
+    script.onerror = () => reject(new Error('Cesium script failed'));
+    document.head.appendChild(script);
+    setTimeout(() => reject(new Error('Cesium timeout')), 25000);
+  }).catch(err => { cesiumLoadPromise = null; throw err; });
+  return cesiumLoadPromise;
+}
+
+async function initCesium() {
+  const statusEl = $('map-status');
+  const container = $('cesium-container');
+  if (!container) return;
+  if (statusEl) statusEl.textContent = 'Loading 3D engine…';
+
+  let C;
+  try { C = await loadCesium(); }
+  catch (err) {
+    console.warn('[cesium]', err.message);
+    if (statusEl) statusEl.textContent = '3D unavailable — 2D map';
+    switchTo2D();
+    return;
+  }
+
+  for (let i = 0; i < 30; i++) {
+    if (container.clientWidth > 40 && container.clientHeight > 40) break;
+    await sleep(100);
+  }
+
+  try { C.Ion.defaultAccessToken = CONFIG.cesiumToken; } catch {}
+
+  try {
+    cesiumViewer = new C.Viewer(container, {
+      terrainProvider: new C.EllipsoidTerrainProvider(),
+      baseLayerPicker: false, geocoder: false, homeButton: false,
+      sceneModePicker: false, navigationHelpButton: false, animation: false,
+      timeline: false, fullscreenButton: false, infoBox: false,
+      selectionIndicator: false, shouldAnimate: false,
+      requestRenderMode: false, useBrowserRecommendedResolution: true
+    });
+
+    const credit = cesiumViewer.cesiumWidget?.creditContainer;
+    if (credit) credit.style.display = 'none';
+
+    const scene = cesiumViewer.scene;
+
+    try {
+      const imagery = C.createWorldImagery({ style: C.IonWorldImageryStyle.AERIAL_WITH_LABELS });
+      cesiumViewer.imageryLayers.removeAll();
+      cesiumViewer.imageryLayers.addImageryProvider(imagery);
+    } catch (e) {
+      try {
+        cesiumViewer.imageryLayers.removeAll();
+        cesiumViewer.imageryLayers.addImageryProvider(
+          new C.OpenStreetMapImageryProvider({ url: 'https://tile.openstreetmap.org/' })
+        );
+      } catch {}
+    }
+
+    scene.globe.enableLighting = false;
+    scene.globe.showGroundAtmosphere = true;
+    scene.globe.depthTestAgainstTerrain = false;
+    if (scene.skyAtmosphere) scene.skyAtmosphere.show = true;
+    scene.highDynamicRange = false;
+    scene.screenSpaceCameraController.minimumZoomDistance = 500000;
+
+    cesiumViewer.camera.setView({
+      destination: C.Cartesian3.fromDegrees(15, 20, 22000000)
+    });
+
+    /* Click-to-activate zoom: wheel scrolls page until globe clicked */
+    const cam = scene.screenSpaceCameraController;
+    cam.enableZoom = false;
+    cam.enableRotate = true;
+    cam.enableTilt = true;
+    cam.enableLook = true;
+
+    container.addEventListener('click', e => {
+      if (!container.classList.contains('zoom-active')) {
+        container.classList.add('zoom-active');
+        cam.enableZoom = true;
+        $('globe-zoom-hint')?.classList.add('active');
+        setTimeout(() => {
+          /* auto-release after 4s of no interaction with the globe */
+        }, 4000);
+      }
+    });
+
+    /* Release zoom when clicking elsewhere on the page */
+    document.addEventListener('click', e => {
+      if (!container.contains(e.target)) {
+        container.classList.remove('zoom-active');
+        cam.enableZoom = false;
+        $('globe-zoom-hint')?.classList.remove('active');
+      }
+    }, true);
+
+    /* Pin click handling — opens event detail modal */
+    const handler = new C.ScreenSpaceEventHandler(scene.canvas);
+    handler.setInputAction(click => {
+      const picked = scene.pick(click.position);
+      if (C.defined(picked) && picked.id) {
+        const id = typeof picked.id.id === 'string' ? picked.id.id : null;
+        if (id) {
+          /* If not zoom-active, treat first click as "activate zoom" AND open pin if hit */
+          if (!container.classList.contains('zoom-active')) {
+            container.classList.add('zoom-active');
+            cam.enableZoom = true;
+            $('globe-zoom-hint')?.classList.add('active');
+          }
+          openEventById(id);
+        }
+      }
+    }, C.ScreenSpaceEventType.LEFT_CLICK);
+
+    if (statusEl) statusEl.textContent = '3D globe · click to zoom';
+    syncCesiumEntities();
+    setTimeout(() => { try { cesiumViewer.resize(); } catch {} }, 350);
+  } catch (err) {
+    console.error('[cesium init]', err);
+    if (statusEl) statusEl.textContent = '3D failed — 2D map';
+    switchTo2D();
+  }
+}
+
+function syncCesiumEntities() {
+  if (!cesiumViewer || !window.Cesium) return;
+  const C = window.Cesium;
+  cesiumViewer.entities.removeAll();
+  const events = visibleEvents().slice(0, 250);
+  for (const ev of events) {
+    if (ev.lat == null || ev.lon == null) continue;
+    if (!Number.isFinite(ev.lat) || !Number.isFinite(ev.lon)) continue;
+    const color = C.Color.fromCssColorString(severityColor(ev.severity));
+    const size = { critical: 13, high: 10, medium: 8, low: 6 }[ev.severity] || 6;
+    cesiumViewer.entities.add({
+      id: ev.id,
+      name: ev.title,
+      position: C.Cartesian3.fromDegrees(ev.lon, ev.lat),
+      point: {
+        pixelSize: size, color,
+        outlineColor: C.Color.WHITE.withAlpha(0.85),
+        outlineWidth: 1.5,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        scaleByDistance: new C.NearFarScalar(1.5e6, 1.4, 2.0e7, 0.5)
+      }
+    });
+  }
+}
+
+function flyToEvent(event) {
+  if (!cesiumViewer || !window.Cesium) return;
+  if (event.lat == null || event.lon == null) return;
+  cesiumViewer.camera.flyTo({
+    destination: window.Cesium.Cartesian3.fromDegrees(event.lon, event.lat, 2500000),
+    duration: 1.6
+  });
+}
+
+/* ══════════════════ 18. LEAFLET 2D ══════════════════ */
+let leafletMap = null;
+let leafletLayers = {};
+
+function initLeaflet() {
+  if (leafletMap || typeof L === 'undefined') return;
+  const container = $('leaflet-map'); if (!container) return;
+  leafletMap = L.map(container, {
+    center: [20, 10], zoom: 2, minZoom: 2,
+    zoomControl: true, worldCopyJump: true
+  });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19
+  }).addTo(leafletMap);
+  leafletLayers = {
+    critical: L.layerGroup().addTo(leafletMap),
+    high: L.layerGroup().addTo(leafletMap),
+    other: L.layerGroup().addTo(leafletMap)
+  };
+  syncLeafletMarkers();
+  setTimeout(() => leafletMap.invalidateSize(), 200);
+}
+
+function syncLeafletMarkers() {
+  if (!leafletMap) return;
+  Object.values(leafletLayers).forEach(g => g.clearLayers());
+  const events = visibleEvents().slice(0, 200);
+  let placed = 0;
+  for (const ev of events) {
+    if (ev.lat == null || ev.lon == null) continue;
+    const group = ev.severity === 'critical' ? leafletLayers.critical
+      : ev.severity === 'high' ? leafletLayers.high : leafletLayers.other;
+    const radius = { critical: 9, high: 7, medium: 5, low: 4 }[ev.severity] || 4;
+    const color = severityColor(ev.severity);
+    const marker = L.circleMarker([ev.lat, ev.lon], {
+      radius, fillColor: color, color: '#ffffff', weight: 1, fillOpacity: 0.75
+    });
+    marker.bindPopup(
+      `<div style="min-width:200px">
+        <div style="font-weight:600;font-size:.8rem;margin-bottom:.35rem">${esc(ev.title)}</div>
+        <div style="font-size:.65rem;color:#94a3b8;font-family:monospace">
+          ${esc(ev.source)} · ${esc(ev.severity)} · ${Math.round(ev.confidence * 100)}%
+        </div>
+      </div>`,
+      { maxWidth: 260 }
+    );
+    marker.on('click', () => openEventById(ev.id));
+    marker.addTo(group);
+    placed++;
+  }
+  const status = $('map-status');
+  if (status) status.textContent = `2D map · ${placed} plotted`;
+}
+
+function switchTo2D() {
+  state.is3D = false;
+  const btn = $('map-toggle');
+  if (btn) { btn.textContent = '🗺️ 2D'; btn.setAttribute('aria-pressed', 'false'); }
+  const leafletEl = $('leaflet-map');
+  if (leafletEl) { leafletEl.classList.add('active'); leafletEl.removeAttribute('aria-hidden'); }
+  const cesiumEl = $('cesium-container');
+  if (cesiumEl) cesiumEl.style.display = 'none';
+  initLeaflet();
+  setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 120);
+}
+
+function switchTo3D() {
+  state.is3D = true;
+  const btn = $('map-toggle');
+  if (btn) { btn.textContent = '🌍 3D'; btn.setAttribute('aria-pressed', 'true'); }
+  const leafletEl = $('leaflet-map');
+  if (leafletEl) { leafletEl.classList.remove('active'); leafletEl.setAttribute('aria-hidden', 'true'); }
+  const cesiumEl = $('cesium-container');
+  if (cesiumEl) cesiumEl.style.display = '';
+  if (!cesiumViewer) initCesium();
+  else setTimeout(() => { try { cesiumViewer.resize(); } catch {} }, 100);
+}
+
+function toggleMapMode() {
+  if (state.is3D) switchTo2D();
+  else switchTo3D();
+}
+
+/* ══════════════════ 19. EVENT DETAIL + RELATED NEWS ══════════════════ */
+function openEventById(id) {
+  const events = visibleEvents();
+  const idx = events.findIndex(e => e.id === id);
+  if (idx > -1) openEventDetail(idx);
+}
+
+function openEventDetail(index) {
+  const events = visibleEvents();
+  const ev = events[index]; if (!ev) return;
+  flyToEvent(ev);
+
+  const titleEl = $('ed-title');
+  const bodyEl = $('ed-body');
+  const relatedWrap = $('ed-related-wrap');
+  const relatedEl = $('ed-related');
+  if (!titleEl || !bodyEl) return;
+
+  titleEl.textContent = ev.title;
+
+  const rows = [
+    ['Category', ev.category],
+    ['Severity', String(ev.severity).toUpperCase()],
+    ['Confidence', `${Math.round(ev.confidence * 100)}%`],
+    ev.meta.magnitude != null ? ['Magnitude', `M${Number(ev.meta.magnitude).toFixed(1)}`] : null,
+    ev.meta.depthKm != null ? ['Depth', `${ev.meta.depthKm} km`] : null,
+    ev.meta.tsunami ? ['Tsunami flag', 'YES'] : null,
+    ev.meta.disasterType ? ['Disaster type', ev.meta.disasterType] : null,
+    ev.place ? ['Location', ev.place] : null,
+    ['Reported (UTC)', formatUtc(ev.time)],
+    ['Age', timeAgo(ev.time)],
+    ['Sources', ev.sources.join(', ')],
+    ['Corroboration', `${ev.sources.length} source${ev.sources.length === 1 ? '' : 's'}`]
+  ].filter(Boolean);
+
+  bodyEl.innerHTML = rows.map(([label, value]) =>
+    `<div class="detail-row"><b>${esc(label)}</b><span>${esc(value)}</span></div>`
+  ).join('');
+
+  if (ev.url && ev.url !== '#') {
+    const link = document.createElement('a');
+    link.className = 'btn btn-primary';
+    link.style.marginTop = '.9rem';
+    link.href = safeUrl(ev.url);
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = `Open ${ev.source} report ↗`;
+    bodyEl.appendChild(link);
+  }
+
+  /* Related news: same category, or matching place name */
+  const related = state.news
+    .filter(n => n.category === ev.category || (ev.place && n.place === ev.place))
+    .slice(0, 5);
+
+  if (related.length && relatedWrap && relatedEl) {
+    relatedWrap.style.display = 'block';
+    relatedEl.innerHTML = related.map((n, i) => {
+      const realIdx = state.news.indexOf(n);
+      return `<button class="item" data-news-index="${realIdx}">
+        ${thumbHtml(n)}
+        <span class="item-main">
+          <span class="item-top">
+            <span class="item-title">${esc(n.title)}</span>
+            <span class="badge-cat">${esc(n.category)}</span>
+          </span>
+          <span class="item-meta">
+            <span>${esc(n.source)}</span><span>·</span>
+            <span>${timeAgo(n.time)}</span>
+          </span>
+        </span>
+      </button>`;
+    }).join('');
+  } else if (relatedWrap) {
+    relatedWrap.style.display = 'none';
+  }
+
+  Modal.open('event-detail-modal');
+}
+
+/* ══════════════════ 20. NEWS DETAIL + JINA READER ══════════════════ */
+function openNewsDetail(index) {
+  const article = visibleNews()[index]; if (!article) return;
+  const imageEl = $('nd-image'), badgesEl = $('nd-badges');
+  const titleEl = $('nd-title'), metaEl = $('nd-meta'), bodyEl = $('nd-body');
+  const loadBtn = $('nd-load-btn'), openLink = $('nd-open-link');
+  if (!titleEl || !bodyEl) return;
+
+  imageEl.innerHTML = heroHtml(article);
+  badgesEl.innerHTML = `
+    <span class="badge-cat">${esc(article.category)}</span>
+    <span class="badge-conf">${Math.round(article.confidence * 100)}% confidence</span>
+    ${article.tone != null ? `<span class="badge-conf">tone ${Number(article.tone).toFixed(1)}</span>` : ''}
+  `;
+  titleEl.textContent = article.title;
+  metaEl.textContent = `${article.source} · ${formatUtc(article.time)} · ${timeAgo(article.time)}`;
+  bodyEl.innerHTML = `<p class="hint-text-sm">Press "Load full article" to fetch the full text via Jina Reader. If that fails, use "Open source".</p>`;
+  loadBtn.onclick = () => loadFullArticle(article, bodyEl, loadBtn);
+  openLink.href = safeUrl(article.url);
+  Modal.open('news-detail-modal');
+}
+
+async function loadFullArticle(article, bodyEl, btn) {
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = '⏳ Loading…';
+  bodyEl.innerHTML = '<p class="hint-text-sm">Fetching full article via Jina Reader…</p>';
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 25000);
+    const res = await fetch('https://r.jina.ai/' + article.url, { signal: ctrl.signal });
     clearTimeout(timer);
     if (!res.ok) throw new Error('Jina HTTP ' + res.status);
     const text = await res.text();
     if (!text || text.length < 200) throw new Error('Jina empty');
-    console.log('[jina] ✓', url.slice(0,60), text.length + 'b');
-    return text;
-  } catch (e) {
-    clearTimeout(timer);
-    console.warn('[jina] ✗', e.message);
-    throw e;
-  }
-}
 
-/* ═══════════════ STATE ═══════════════ */
-const state = { events: [], news: [] };
-
-/* ═══════════════ CATEGORY THEME ═══════════════ */
-const CAT_THEME = {
-  Conflict:  { c1: '#ef4444', c2: '#450a0a', emoji: '⚔️' },
-  Disaster:  { c1: '#0ea5e9', c2: '#0c4a6e', emoji: '🌊' },
-  Health:    { c1: '#22c55e', c2: '#052e16', emoji: '🦠' },
-  Climate:   { c1: '#f59e0b', c2: '#431407', emoji: '🌡️' },
-  Politics:  { c1: '#818cf8', c2: '#1e1b4b', emoji: '🏛️' },
-  Economy:   { c1: '#eab308', c2: '#422006', emoji: '📉' },
-  World:     { c1: '#38bdf8', c2: '#0c4a6e', emoji: '🌍' }
-};
-function categorize(title) {
-  const t = String(title || '');
-  if (/earthquake|flood|hurricane|wildfire|tsunami|volcano|storm|disaster/i.test(t)) return 'Disaster';
-  if (/war|conflict|airstrike|missile|troops|invasion|ceasefire|attack/i.test(t)) return 'Conflict';
-  if (/virus|covid|outbreak|epidemic|vaccine|disease|hospital/i.test(t)) return 'Health';
-  if (/climate|warming|emission|glacier/i.test(t)) return 'Climate';
-  if (/election|parliament|sanction|summit|treaty|vote|protest/i.test(t)) return 'Politics';
-  if (/market|inflation|recession|gdp|currency|stock/i.test(t)) return 'Economy';
-  return 'World';
-}
-
-/* ═══════════════ THUMBNAIL ═══════════════ */
-function thumbHtml(item) {
-  const theme = CAT_THEME[categorize(item.title)] || CAT_THEME.World;
-  if (item.image) {
-    return `<span class="thumb" style="background:linear-gradient(135deg,${theme.c2},${theme.c1})">
-      <img src="${esc(item.image)}" alt="" loading="lazy"
-        onerror="this.parentElement.innerHTML='<span class=&quot;thumb-emoji&quot;>${theme.emoji}</span>'">
-    </span>`;
-  }
-  return `<span class="thumb" style="background:linear-gradient(135deg,${theme.c2},${theme.c1})">
-    <span class="thumb-emoji">${theme.emoji}</span>
-  </span>`;
-}
-
-/* ═══════════════ RENDER ═══════════════ */
-function renderEvents() {
-  const c = $('event-list');
-  if (!c) return;
-  if (!state.events.length) {
-    c.innerHTML = `<div class="empty">◌ No events available.</div>`;
-    return;
-  }
-  c.innerHTML = state.events.slice(0, 15).map((e, i) => `
-    <button class="item ${esc(e.severity)}" data-ev-index="${i}">
-      <span class="item-main">
-        <span class="item-top">
-          <span class="item-title">${esc(e.title)}</span>
-          <span class="badge badge-${esc(e.severity)}">${esc(e.severity)}</span>
-        </span>
-        <span class="item-meta">
-          <span>${esc(e.source)}</span> · <span>${timeAgo(e.time)}</span>
-          ${e.place ? `· <span>${esc(e.place)}</span>` : ''}
-        </span>
-      </span>
-    </button>
-  `).join('');
-}
-
-function renderNews() {
-  const c = $('news-feed');
-  if (!c) return;
-  if (!state.news.length) {
-    c.innerHTML = `<div class="empty error">⚠ No headlines.<br>Press ⟳ Refresh.</div>`;
-    return;
-  }
-  c.innerHTML = state.news.slice(0, 30).map((n, i) => `
-    <button class="item" data-news-index="${i}">
-      ${thumbHtml(n)}
-      <span class="item-main">
-        <span class="item-top">
-          <span class="item-title">${esc(n.title)}</span>
-        </span>
-        <span class="item-meta">
-          <span>${esc(n.source)}</span> · <span>${timeAgo(n.time)}</span>
-          · <span class="badge-cat">${esc(categorize(n.title))}</span>
-        </span>
-      </span>
-    </button>
-  `).join('');
-}
-
-function renderStats() {
-  const critical = state.events.filter(e => e.severity === 'critical' || e.severity === 'high').length;
-  const score = Math.min(100, Math.round(state.events.length * 0.5 + critical * 3));
-  $('stat-active').textContent = state.events.length || '—';
-  $('stat-alerts').textContent = critical || '—';
-  $('stat-news').textContent = state.news.length || '—';
-  $('stat-score').textContent = score || '—';
-  $('ev-count').textContent = state.events.length;
-  $('news-count').textContent = state.news.length;
-}
-
-/* ═══════════════ TOAST ═══════════════ */
-function toast(title, sub, kind = 'low') {
-  const c = $('toast-container');
-  const colors = { critical: 'var(--critical)', high: 'var(--high)', low: 'var(--accent)' };
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.style.borderLeftColor = colors[kind] || colors.low;
-  t.innerHTML = `<div class="toast-title">${esc(title)}</div>${sub ? `<div class="toast-meta">${esc(sub)}</div>` : ''}`;
-  c.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 6000);
-}
-
-/* ═══════════════ ARTICLE MODAL ═══════════════ */
-async function openArticle(item) {
-  const modal = $('article-modal');
-  modal.classList.add('active');
-  const theme = CAT_THEME[categorize(item.title)] || CAT_THEME.World;
-
-  $('article-hero').innerHTML = item.image
-    ? `<div class="hero" style="background:linear-gradient(135deg,${theme.c2},${theme.c1})">
-        <img src="${esc(item.image)}" alt=""
-          onerror="this.parentElement.innerHTML='<span class=&quot;hero-emoji&quot;>${theme.emoji}</span>'">
-      </div>`
-    : `<div class="hero" style="background:linear-gradient(135deg,${theme.c2},${theme.c1})">
-        <span class="hero-emoji">${theme.emoji}</span>
-      </div>`;
-
-  $('article-source').textContent = `${item.source} · ${timeAgo(item.time)}`;
-  $('article-title').textContent = item.title;
-  $('article-open').href = item.url;
-
-  const bodyEl = $('article-body');
-  bodyEl.className = 'article-body loading';
-  bodyEl.innerHTML = 'Fetching full article text via Jina Reader…';
-
-  /* Try Jina Reader first */
-  try {
-    const text = await fetchArticleViaJina(item.url);
-    bodyEl.className = 'article-body';
-
-    /* Jina returns markdown. Extract plain paragraphs. */
     const cleaned = text
-      /* Remove "Title:", "URL Source:" metadata header that Jina adds */
       .replace(/^Title:.*$/m, '')
       .replace(/^URL Source:.*$/m, '')
       .replace(/^Markdown Content:\s*$/m, '')
@@ -689,393 +2256,378 @@ async function openArticle(item) {
     if (paragraphs.length) {
       bodyEl.innerHTML = paragraphs.slice(0, 25).map(p => `<p>${esc(p)}</p>`).join('');
     } else {
-      /* Jina returned something but no clean paragraphs — show raw text */
-      bodyEl.innerHTML = cleaned.split('\n').filter(l => l.trim().length > 40)
-        .slice(0, 25).map(l => `<p>${esc(l.trim())}</p>`).join('');
+      const lines = cleaned.split('\n').filter(l => l.trim().length > 40);
+      bodyEl.innerHTML = lines.slice(0, 25).map(l => `<p>${esc(l.trim())}</p>`).join('') ||
+        '<p class="hint-text-sm">Reader returned no readable text. Use "Open source" below.</p>';
     }
   } catch (err) {
-    bodyEl.className = 'article-body';
+    console.warn('[jina]', err.message);
     bodyEl.innerHTML = `
-      <p>Couldn't load the article body inline (the publisher may be blocking readers).</p>
-      <p><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Open on ${esc(item.source)} ↗</a></p>
+      <p class="hint-text-sm">⚠ Couldn't load the article inline — the publisher may be blocking readers.</p>
+      <p><a class="btn btn-primary" href="${esc(safeUrl(article.url))}" target="_blank" rel="noopener noreferrer">Read on ${esc(article.source)} ↗</a></p>
     `;
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
   }
 }
 
-/* ═══════════════ THREE.JS — LOADER GLOBE ═══════════════ */
-function makeLoaderGlobe(canvas) {
-  if (typeof THREE === 'undefined') return null;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-  cam.position.z = 5.6;
-  const wire = new THREE.LineSegments(
-    new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(2, 2)),
-    new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.45 })
-  );
-  scene.add(wire);
-  const pPos = new Float32Array(1200 * 3);
-  for (let i = 0; i < pPos.length; i++) pPos[i] = (Math.random() - 0.5) * 16;
-  const particles = new THREE.Points(
-    new THREE.BufferGeometry().setAttribute('position',
-      new THREE.BufferAttribute(pPos, 3)),
-    new THREE.PointsMaterial({ size: 0.028, color: 0x818cf8, transparent: true, opacity: 0.55 })
-  );
-  scene.add(particles);
-  let raf, on = false;
-  function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    cam.aspect = w / h; cam.updateProjectionMatrix();
+/* ══════════════════ 21. AUTOMATED BRIEF ══════════════════ */
+function generateBrief() {
+  const container = $('ai-summary-text'); if (!container) return;
+  const events = visibleEvents();
+  if (!events.length) {
+    container.textContent = '◌ No events in the selected window.';
+    return;
   }
-  function frame() {
-    if (!on) return;
-    wire.rotation.y += 0.004; wire.rotation.x += 0.0015;
-    particles.rotation.y += 0.0006;
-    renderer.render(scene, cam);
-    raf = requestAnimationFrame(frame);
-  }
-  return {
-    start() { if (on) return; on = true; resize(); frame(); },
-    stop() { on = false; if (raf) cancelAnimationFrame(raf); }
-  };
-}
-
-/* ═══════════════ THREE.JS — CINEMATIC EARTH ═══════════════ */
-function makeCinematicEarth(canvas) {
-  if (typeof THREE === 'undefined') return null;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-
-  const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
-  cam.position.set(0, 0.9, 3.1);
-  cam.lookAt(0, 0, 0);
-
-  const sPos = new Float32Array(1500 * 3);
-  for (let i = 0; i < sPos.length; i++) sPos[i] = (Math.random() - 0.5) * 200;
-  scene.add(new THREE.Points(
-    new THREE.BufferGeometry().setAttribute('position',
-      new THREE.BufferAttribute(sPos, 3)),
-    new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0.65 })
-  ));
-
-  const earthGroup = new THREE.Group();
-  scene.add(earthGroup);
-
-  const earthMat = new THREE.MeshPhongMaterial({
-    color: 0x1b2a4a,
-    specular: new THREE.Color(0x0a0a12),
-    shininess: 8,
-    emissive: new THREE.Color(0x060a18),
-    emissiveIntensity: 0.3
-  });
-  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), earthMat));
-
-  earthGroup.add(new THREE.Mesh(
-    new THREE.SphereGeometry(1.045, 48, 48),
-    new THREE.MeshPhongMaterial({
-      color: 0x4f6dff, transparent: true, opacity: 0.08,
-      side: THREE.BackSide, depthWrite: false
-    })
-  ));
-
-  scene.add(new THREE.AmbientLight(0x2a3358, 0.55));
-  const key = new THREE.DirectionalLight(0xffffff, 1.35);
-  key.position.set(5, 3, 5);
-  scene.add(key);
-  const rim = new THREE.DirectionalLight(0x818cf8, 0.45);
-  rim.position.set(-5, -1, -4);
-  scene.add(rim);
-
-  const loader = new THREE.TextureLoader();
-  if (loader.setCrossOrigin) loader.setCrossOrigin('anonymous');
-  const urls = [
-    'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://unpkg.com/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/textures/planets/earth_atmos_2048.jpg'
+  const counts = {};
+  for (const e of events) counts[e.category] = (counts[e.category] || 0) + 1;
+  const [topCat, topCount] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0] || ['—', 0];
+  const critical = events.filter(e => e.severity === 'critical').length;
+  const high = events.filter(e => e.severity === 'high').length;
+  const confidence = Math.round(meanConfidence(events) * 100);
+  const index = computeCrisisIndex(events);
+  const hotspots = [...new Set(events
+    .filter(e => e.place && (e.severity === 'critical' || e.severity === 'high'))
+    .slice(0, 3).map(e => e.place))];
+  const parts = [
+    `${events.length} events across ${state.timelineDays} day${state.timelineDays === 1 ? '' : 's'}.`,
+    `Dominant category: ${topCat} (${topCount}).`,
+    `${critical} critical, ${high} high severity.`,
+    `Crisis Index ${index}/100 at ${confidence}% confidence.`
   ];
-  let idx = 0;
-  (function tryLoad() {
-    const url = urls[idx];
-    console.log('[earth] loading', url);
-    loader.load(url,
-      tex => {
-        console.log('[earth] ✓', url);
-        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
-        tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1);
-        earthMat.map = tex;
-        earthMat.color.set(0xffffff);
-        earthMat.emissive.set(0x000000);
-        earthMat.emissiveIntensity = 0;
-        earthMat.needsUpdate = true;
-      },
-      undefined,
-      () => {
-        idx++;
-        if (idx < urls.length) tryLoad();
-        else console.warn('[earth] all texture CDNs failed');
-      }
-    );
-  })();
-
-  let raf, on = false;
-  function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    cam.aspect = w / h; cam.updateProjectionMatrix();
-  }
-  function frame() {
-    if (!on) return;
-    earthGroup.rotation.y += 0.0016;
-    renderer.render(scene, cam);
-    raf = requestAnimationFrame(frame);
-  }
-  return {
-    start() { if (on) return; on = true; resize(); frame(); },
-    stop() { on = false; if (raf) cancelAnimationFrame(raf); }
-  };
+  if (hotspots.length) parts.push(`Hotspots: ${hotspots.join(', ')}.`);
+  parts.push('— Rule-based, not a language model.');
+  container.textContent = parts.join(' ');
 }
 
-/* ═══════════════ 2D FALLBACK MAP (Leaflet) ═══════════════ */
-let leafletMap = null;
-function initLeaflet() {
-  if (leafletMap || typeof L === 'undefined') return;
-  const container = $('globe-canvas');
-  /* Replace canvas with a div for leaflet */
-  const div = document.createElement('div');
-  div.id = 'leaflet-fallback';
-  div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
-  container.parentElement.replaceChild(div, container);
+/* ══════════════════ 22. REFRESH PIPELINE ══════════════════ */
+let refreshInFlight = false;
 
-  leafletMap = L.map(div, { center: [20, 10], zoom: 2, minZoom: 2, worldCopyJump: true });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19
-  }).addTo(leafletMap);
-  syncLeafletMarkers();
-  $('map-status').textContent = '2D map · ' + state.events.filter(e => e.lat != null).length + ' plotted';
-}
-function syncLeafletMarkers() {
-  if (!leafletMap) return;
-  const colors = { critical: '#ef4444', high: '#fb923c', medium: '#fbbf24', low: '#4ade80' };
-  state.events.forEach(ev => {
-    if (ev.lat == null || ev.lon == null) return;
-    L.circleMarker([ev.lat, ev.lon], {
-      radius: ev.severity === 'critical' ? 8 : 5,
-      fillColor: colors[ev.severity] || '#4ade80',
-      color: '#fff', weight: 1, fillOpacity: 0.75
-    }).bindPopup(`<b>${esc(ev.title)}</b><br><small>${esc(ev.source)} · ${esc(ev.severity)}</small>`)
-      .addTo(leafletMap);
-  });
-}
-
-/* ═══════════════ DASHBOARD GLOBE (Three.js, low-detail) ═══════════════ */
-function makeDashboardGlobe(canvas) {
-  if (typeof THREE === 'undefined') return null;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-
-  const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-  cam.position.set(0, 0, 3.4);
-
-  const earthMat = new THREE.MeshPhongMaterial({ color: 0x1b2a4a, shininess: 5 });
-  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 48), earthMat);
-  scene.add(earth);
-
-  scene.add(new THREE.AmbientLight(0x2a3358, 0.6));
-  const key = new THREE.DirectionalLight(0xffffff, 1.2);
-  key.position.set(5, 3, 5);
-  scene.add(key);
-  const rim = new THREE.DirectionalLight(0x818cf8, 0.4);
-  rim.position.set(-5, -1, -4);
-  scene.add(rim);
-
-  const loader = new THREE.TextureLoader();
-  if (loader.setCrossOrigin) loader.setCrossOrigin('anonymous');
-  const urls = [
-    'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://unpkg.com/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg'
-  ];
-  let idx = 0;
-  (function tryLoad() {
-    loader.load(urls[idx],
-      tex => {
-        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
-        earthMat.map = tex; earthMat.color.set(0xffffff); earthMat.needsUpdate = true;
-      },
-      undefined,
-      () => { idx++; if (idx < urls.length) tryLoad(); }
-    );
-  })();
-
-  /* Markers */
-  const markerGroup = new THREE.Group();
-  scene.add(markerGroup);
-  function latLonToVec(lat, lon, r) {
-    const phi = (90 - lat) * Math.PI / 180;
-    const theta = (lon + 180) * Math.PI / 180;
-    return new THREE.Vector3(
-      -r * Math.sin(phi) * Math.cos(theta),
-       r * Math.cos(phi),
-       r * Math.sin(phi) * Math.sin(theta)
-    );
-  }
-  const colors = { critical: 0xef4444, high: 0xfb923c, medium: 0xfbbf24, low: 0x4ade80 };
-  function syncMarkers(events) {
-    while (markerGroup.children.length) {
-      const c = markerGroup.children.pop();
-      c.geometry?.dispose?.(); c.material?.dispose?.();
+async function refreshAllData({ silent = false } = {}) {
+  if (refreshInFlight) return;
+  refreshInFlight = true;
+  try {
+    const [usgs, reliefweb, gdelt, news, social] = await Promise.all([
+      ingestUSGS(), ingestReliefWeb(), ingestGDELT(), ingestNews(), ingestSocial()
+    ]);
+    const combined = [...usgs, ...reliefweb, ...gdelt];
+    state.events = mergeEvents(combined).sort((a, b) => b.time - a.time).slice(0, CONFIG.maxEvents);
+    state.news = news;
+    state.social = social;
+    renderAll();
+    if (cinematicGlobe) updateCinematicMarkers();
+    if (!silent) {
+      const errors = Object.values(SOURCES).filter(s => s.status === 'error').length;
+      if (errors) showToast('Partial data', `${errors} source${errors === 1 ? '' : 's'} unreachable.`, 'high');
     }
-    events.forEach(ev => {
-      if (ev.lat == null || ev.lon == null) return;
-      const pos = latLonToVec(ev.lat, ev.lon, 1.005);
-      const dot = new THREE.Mesh(
-        new THREE.SphereGeometry(ev.severity === 'critical' ? 0.025 : 0.016, 8, 8),
-        new THREE.MeshBasicMaterial({ color: colors[ev.severity] || 0x4ade80 })
-      );
-      dot.position.copy(pos);
-      markerGroup.add(dot);
-    });
-  }
-  syncMarkers(state.events);
-
-  let raf, on = false;
-  function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    cam.aspect = w / h; cam.updateProjectionMatrix();
-  }
-  function frame() {
-    if (!on) return;
-    earth.rotation.y += 0.0015;
-    markerGroup.rotation.y += 0.0015;
-    renderer.render(scene, cam);
-    raf = requestAnimationFrame(frame);
-  }
-  return {
-    start() { if (on) return; on = true; resize(); frame(); },
-    stop() { on = false; if (raf) cancelAnimationFrame(raf); },
-    syncMarkers
-  };
+  } catch (err) {
+    console.error('[refresh]', err);
+    if (!silent) showToast('Refresh failed', err.message, 'critical');
+  } finally { refreshInFlight = false; }
 }
 
-/* ═══════════════ CLICK HANDLING ═══════════════ */
+/* ══════════════════ 23. PDF EXPORT ══════════════════ */
+async function exportPdf() {
+  const btn = $('pdf-export');
+  if (!btn || typeof html2canvas === 'undefined' || !window.jspdf) {
+    showToast('Export unavailable', 'PDF libraries not loaded.', 'medium');
+    return;
+  }
+  const original = btn.textContent;
+  btn.textContent = '⏳'; btn.disabled = true;
+  try {
+    const target = $('dashboard');
+    const canvas = await html2canvas(target, {
+      scale: Math.min(1.5, window.devicePixelRatio || 1),
+      backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--bg-deep').trim() || '#0a0a1a',
+      useCORS: true, logging: false
+    });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('landscape', 'mm', 'a4');
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+    const imgH = (canvas.height * pageW) / canvas.width;
+    const imgData = canvas.toDataURL('image/png');
+    let position = 0, remaining = imgH;
+    pdf.addImage(imgData, 'PNG', 0, position, pageW, imgH);
+    remaining -= pageH;
+    while (remaining > 0) {
+      position -= pageH; pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, pageW, imgH);
+      remaining -= pageH;
+    }
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    pdf.save(`GCMS-CORE-X_${stamp}.pdf`);
+    showToast('Report exported', 'PDF saved.', 'low', 4000);
+  } catch (err) {
+    showToast('Export failed', err.message, 'medium');
+  } finally {
+    btn.textContent = original; btn.disabled = false;
+  }
+}
+
+/* ══════════════════ 24. VOICE ══════════════════ */
+function startVoiceCommands() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showToast('Voice unavailable', 'Speech recognition unsupported.', 'low'); return; }
+  const recognition = new SR();
+  recognition.lang = 'en-US';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onresult = e => {
+    const t = e.results[0][0].transcript.toLowerCase().trim();
+    showToast('🎤 Heard', t, 'low', 3500);
+    if (/\b(map|globe|3d|2d)\b/.test(t)) toggleMapMode();
+    else if (/\b(story|narrative)\b/.test(t)) toggleStoryMode();
+    else if (/\b(fullscreen|full screen)\b/.test(t)) toggleFullscreen();
+    else if (/\b(pdf|export|report)\b/.test(t)) exportPdf();
+    else if (/\b(theme|dark|light)\b/.test(t)) toggleTheme();
+    else if (/\b(refresh|reload|update)\b/.test(t)) refreshAllSources();
+  };
+  recognition.onerror = e => { if (e.error !== 'aborted') showToast('Voice error', e.error, 'low'); };
+  recognition.start();
+  showToast('🎤 Listening', 'Try: "map", "story", "refresh", "export".', 'low', 4000);
+}
+
+/* ══════════════════ 25. UI ACTIONS ══════════════════ */
+function toggleTheme() {
+  const root = document.documentElement;
+  const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  root.setAttribute('data-theme', next);
+  const btn = $('theme-toggle');
+  if (btn) btn.textContent = next === 'light' ? '☀️' : '🌓';
+  renderTrendCharts();
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(() => {
+      showToast('Fullscreen blocked', 'The browser refused.', 'low');
+    });
+  } else document.exitFullscreen?.();
+}
+
+function toggleStoryMode() {
+  state.storyMode = !state.storyMode;
+  const dashboard = $('dashboard');
+  const story = $('story-mode');
+  const btn = $('story-toggle');
+  if (state.storyMode) {
+    dashboard.style.display = 'none';
+    story.classList.add('active');
+    if (btn) { btn.textContent = '📊 Dashboard'; btn.setAttribute('aria-pressed', 'true'); }
+    renderStoryNews(); renderStoryStats();
+    requestAnimationFrame(() => renderTrendCharts());
+    window.scrollTo(0, 0);
+  } else {
+    dashboard.style.display = 'grid';
+    story.classList.remove('active');
+    if (btn) { btn.textContent = '📖 Story'; btn.setAttribute('aria-pressed', 'false'); }
+    requestAnimationFrame(() => renderTrendCharts());
+    window.scrollTo(0, 0);
+  }
+}
+
+async function refreshAllSources() {
+  showToast('⟳ Refreshing', 'Pulling latest from all sources…', 'low', 3000);
+  await refreshAllData({ silent: false });
+}
+
+/* ══════════════════ 26. EVENT DELEGATION ══════════════════ */
 document.addEventListener('click', e => {
+  const eventBtn = e.target.closest('[data-event-index]');
+  if (eventBtn) {
+    const idx = parseInt(eventBtn.getAttribute('data-event-index'), 10);
+    if (Number.isFinite(idx)) openEventDetail(idx);
+    return;
+  }
   const newsBtn = e.target.closest('[data-news-index]');
   if (newsBtn) {
-    const i = +newsBtn.dataset.newsIndex;
-    if (state.news[i]) openArticle(state.news[i]);
+    const idx = parseInt(newsBtn.getAttribute('data-news-index'), 10);
+    if (Number.isFinite(idx)) openNewsDetail(idx);
     return;
   }
-  const evBtn = e.target.closest('[data-ev-index]');
-  if (evBtn) {
-    const ev = state.events[+evBtn.dataset.evIndex];
-    if (ev && ev.url) window.open(ev.url, '_blank', 'noopener');
-    return;
-  }
-  if (e.target.id === 'article-close' || e.target.id === 'article-modal') {
-    $('article-modal').classList.remove('active');
-  }
-  if (e.target.id === 'theme-toggle') {
-    const cur = document.documentElement.getAttribute('data-theme');
-    document.documentElement.setAttribute('data-theme', cur === 'light' ? 'dark' : 'light');
-  }
-  if (e.target.id === 'refresh-btn') {
-    refreshAll();
+  const catBtn = e.target.closest('[data-news-cat]');
+  if (catBtn) {
+    state.newsCategory = catBtn.getAttribute('data-news-cat');
+    renderNewsChips(); renderNewsFeed();
   }
 });
 
+/* ══════════════════ 27. KEYBOARD ══════════════════ */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') $('article-modal').classList.remove('active');
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+    if (e.key === 'Escape') e.target.blur();
+    return;
+  }
+  switch (e.key) {
+    case 'm': case 'M': toggleMapMode(); break;
+    case 's': case 'S': toggleStoryMode(); break;
+    case 'f': case 'F': toggleFullscreen(); break;
+    case 'p': case 'P': exportPdf(); break;
+    case 't': case 'T': toggleTheme(); break;
+    case 'r': case 'R': refreshAllSources(); break;
+    case '/': e.preventDefault(); $('news-search')?.focus(); break;
+    case '?': e.preventDefault(); Modal.open('shortcuts-modal', $('shortcuts-toggle')); break;
+    case 'Escape': Modal.closeAll(); break;
+  }
 });
 
-/* ═══════════════ REFRESH ═══════════════ */
-let dashboardGlobe = null;
-async function refreshAll() {
-  toast('Refreshing…', 'Racing proxies for live news', 'low');
-  const [news, events] = await Promise.allSettled([loadNews(), loadEvents()]);
-  if (news.status === 'fulfilled') state.news = news.value;
-  if (events.status === 'fulfilled') state.events = events.value;
-  renderNews(); renderEvents(); renderStats();
-  if (dashboardGlobe) dashboardGlobe.syncMarkers(state.events);
-  toast('Refreshed', `${state.news.length} headlines · ${state.events.length} events`, 'low');
+/* ══════════════════ 28. BOOT ══════════════════ */
+let loaderGlobe = null;
+let cinematicGlobe = null;
+
+function updateLoader(percent, message) {
+  const bar = $('loader-bar'); const status = $('loader-status');
+  if (bar) bar.style.width = `${clamp(percent, 0, 100)}%`;
+  if (status) status.textContent = message;
 }
 
-/* ═══════════════ CLOCK ═══════════════ */
-function tickClock() {
-  const el = $('clock');
-  if (el) el.textContent = new Date().toISOString().slice(11, 19) + ' UTC';
+function updateCinematicMarkers() {
+  if (!cinematicGlobe || typeof THREE === 'undefined') return;
+  const pts = state.events
+    .filter(e => e.lat != null && e.lon != null).slice(0, 40)
+    .map(e => ({
+      lat: e.lat, lon: e.lon,
+      color: new THREE.Color(
+        e.severity === 'critical' ? '#ef4444'
+          : e.severity === 'high' ? '#fb923c'
+          : e.severity === 'medium' ? '#fbbf24' : '#4ade80'
+      ).getHex(),
+      size: e.severity === 'critical' ? 0.028 : 0.02
+    }));
+  cinematicGlobe.setMarkers(pts);
 }
-setInterval(tickClock, 1000);
 
-/* ═══════════════ INIT ═══════════════ */
 async function init() {
-  const loaderGlobe = makeLoaderGlobe($('loader-canvas'));
+  loaderGlobe = createThreeLoader($('loader-canvas'), '#818cf8');
   loaderGlobe?.start();
 
-  const setLoader = (pct, msg) => {
-    const b = $('loader-bar'); if (b) b.style.width = pct + '%';
-    const s = $('loader-status'); if (s) s.textContent = msg;
-  };
+  const colorPicker = $('loader-color');
+  colorPicker?.addEventListener('input', e => {
+    loaderGlobe?.setAccent(e.target.value);
+    document.documentElement.style.setProperty('--accent', e.target.value);
+  });
 
-  setLoader(15, 'Racing proxies for live headlines…');
-  const newsP = loadNews();
-  setLoader(50, 'Fetching seismic events…');
-  const evP = loadEvents();
+  updateLoader(8, 'Initialising pipeline…');
+  await sleep(180);
+  updateLoader(20, 'Fetching seismic data…');
+  const usgsP = ingestUSGS();
+  updateLoader(35, 'Fetching humanitarian reports…');
+  const reliefP = ingestReliefWeb();
+  updateLoader(50, 'Fetching conflict data…');
+  const gdeltP = ingestGDELT();
+  updateLoader(62, 'Fetching world headlines…');
+  const newsP = ingestNews();
+  updateLoader(74, 'Fetching social signals…');
+  const socialP = ingestSocial();
 
-  const [newsRes, evRes] = await Promise.allSettled([newsP, evP]);
-  state.news = newsRes.status === 'fulfilled' ? newsRes.value : FALLBACK_NEWS.map((n, i) => ({ ...n, time: Date.now() - i * 3600000 }));
-  state.events = evRes.status === 'fulfilled' ? evRes.value : [];
+  updateLoader(84, 'Normalising…');
+  const [usgs, relief, gdelt, news, social] = await Promise.all([usgsP, reliefP, gdeltP, newsP, socialP]);
 
-  setLoader(100, 'System ready');
-  await sleep(300);
+  const combined = [...usgs, ...relief, ...gdelt];
+  state.events = mergeEvents(combined).sort((a, b) => b.time - a.time).slice(0, CONFIG.maxEvents);
+  state.news = news;
+  state.social = social;
+
+  updateLoader(94, 'Warming up map…');
+  await sleep(220);
+  updateLoader(100, 'System ready');
+
   loaderGlobe?.stop();
-  $('loader').classList.add('hidden');
+  await sleep(280);
+  $('loader')?.classList.add('hidden');
 
   const cinematic = $('cinematic-view');
-  cinematic.classList.add('active');
-  const earth = makeCinematicEarth($('cinematic-canvas'));
-  earth?.start();
+  cinematic?.classList.add('active');
+  cinematicGlobe = createThreeCinematic($('cinematic-canvas'));
+  cinematicGlobe?.start();
+  updateCinematicMarkers();
 
   const enter = () => {
-    cinematic.removeEventListener('click', enter);
-    cinematic.removeEventListener('touchstart', enter);
-    cinematic.removeEventListener('keydown', onKey);
-    cinematic.classList.remove('active');
-    earth?.stop();
-    $('dashboard').classList.add('active');
-    void $('dashboard').offsetHeight;
-    setTimeout(() => {
-      const canvas = $('globe-canvas');
-      if (canvas && typeof THREE !== 'undefined') {
-        dashboardGlobe = makeDashboardGlobe(canvas);
-        dashboardGlobe?.start();
-        $('map-status').textContent = '3D globe · live';
-      } else {
-        initLeaflet();
-      }
-    }, 200);
-    tickClock();
-    renderNews(); renderEvents(); renderStats();
-    toast('System online', `${state.news.length} headlines · ${state.events.length} events`, 'low');
+    cinematic?.removeEventListener('click', enter);
+    cinematic?.removeEventListener('keydown', onKey);
+    cinematic?.removeEventListener('touchstart', enter);
+    expandToDashboard();
   };
   const onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter(); } };
-  cinematic.addEventListener('click', enter);
-  cinematic.addEventListener('touchstart', enter, { passive: true });
-  cinematic.addEventListener('keydown', onKey);
+  cinematic?.addEventListener('click', enter);
+  cinematic?.addEventListener('keydown', onKey);
+  cinematic?.addEventListener('touchstart', enter, { passive: true });
+
+  wireControls();
+
+  setInterval(() => {
+    if (document.hidden) return;
+    refreshAllData({ silent: true });
+  }, CONFIG.refreshMs);
 }
 
+function wireControls() {
+  $('map-toggle')?.addEventListener('click', toggleMapMode);
+  $('theme-toggle')?.addEventListener('click', toggleTheme);
+  $('fullscreen-toggle')?.addEventListener('click', toggleFullscreen);
+  $('pdf-export')?.addEventListener('click', exportPdf);
+  $('voice-toggle')?.addEventListener('click', startVoiceCommands);
+  $('story-toggle')?.addEventListener('click', toggleStoryMode);
+  $('shortcuts-toggle')?.addEventListener('click', e => Modal.open('shortcuts-modal', e.currentTarget));
+  $('news-refresh-btn')?.addEventListener('click', refreshAllSources);
+  $('ai-summary-btn')?.addEventListener('click', generateBrief);
+  $('news-search')?.addEventListener('input', e => {
+    state.newsSearch = e.target.value; renderNewsFeed();
+  });
+  $('timeline-slider')?.addEventListener('input', e => {
+    state.timelineDays = parseInt(e.target.value, 10) || 7;
+    const label = $('timeline-label');
+    if (label) label.textContent = state.timelineDays === 1 ? '24 hours' : `${state.timelineDays} days`;
+    renderAll();
+  });
+}
+
+async function expandToDashboard() {
+  const cinematic = $('cinematic-view');
+  const dashboard = $('dashboard');
+  cinematic?.classList.remove('active');
+  cinematicGlobe?.stop();
+  dashboard?.classList.add('active');
+  if (dashboard) dashboard.style.display = 'grid';
+  void dashboard?.offsetHeight;
+  await sleep(180);
+  initCesium();
+  renderAll();
+  generateBrief();
+  const failed = Object.entries(SOURCES).filter(([, s]) => s.status === 'error');
+  if (failed.length) {
+    showToast('Some sources unavailable', failed.map(([, s]) => s.label).join(', '), 'high', 9000);
+  } else {
+    showToast('System online', `${state.events.length} events · ${state.news.length} headlines`, 'low', 4500);
+  }
+  const tick = () => { const el = $('clock'); if (el) el.textContent = new Date().toISOString().slice(11, 19) + ' UTC'; };
+  tick(); setInterval(tick, 1000);
+}
+
+/* ══════════════════ 29. LIFECYCLE ══════════════════ */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { cinematicGlobe?.stop(); loaderGlobe?.stop(); }
+  else {
+    if ($('cinematic-view')?.classList.contains('active')) cinematicGlobe?.start();
+    if (cesiumViewer) try { cesiumViewer.resize(); } catch {}
+    if (leafletMap) try { leafletMap.invalidateSize(); } catch {}
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (cesiumViewer) try { cesiumViewer.resize(); } catch {}
+  if (leafletMap) try { leafletMap.invalidateSize(); } catch {}
+});
+
+/* ══════════════════ 30. GO ══════════════════ */
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
 else init();
+
+})();
 </script>
 </body>
 </html>
