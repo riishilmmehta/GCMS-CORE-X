@@ -4,20 +4,34 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <meta name="color-scheme" content="dark light" />
+<meta name="description" content="GCMS CORE X — Real-time global crisis intelligence dashboard." />
 <title>GCMS CORE X — Global Crisis Monitor</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<!-- Three.js — REQUIRED for loader + cinematic globes -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
 
 <style>
+/* ═══════════════════════════════════════════════════════════
+   DESIGN TOKENS
+   ═══════════════════════════════════════════════════════════ */
 :root{
   --bg-deep:#0a0a1a;
+  --bg-panel:rgba(15,23,42,.62);
+  --bg-header:rgba(10,10,26,.88);
   --accent:#818cf8;
   --accent-dark:#4f46e5;
+  --accent-glow:rgba(129,140,248,.4);
   --text-primary:#f8fafc;
   --text-secondary:#a3b1c6;
   --text-muted:#7a8aa3;
@@ -28,1054 +42,216 @@
   --glass:rgba(255,255,255,.03);
   --glass-border:rgba(255,255,255,.10);
   --glass-highlight:rgba(255,255,255,.06);
+  --shadow:0 8px 32px rgba(0,0,0,.45);
+  --focus:#a5b4fc;
+  --tap:44px;
   --radius:12px;
 }
 [data-theme="light"]{
-  --bg-deep:#eef2f7; --text-primary:#0f172a; --text-secondary:#334155;
-  --text-muted:#5b6b82; --glass:rgba(255,255,255,.6);
-  --glass-border:rgba(0,0,0,.10); --glass-highlight:rgba(0,0,0,.04);
+  --bg-deep:#eef2f7;
+  --bg-panel:rgba(255,255,255,.75);
+  --bg-header:rgba(255,255,255,.9);
+  --text-primary:#0f172a;
+  --text-secondary:#334155;
+  --text-muted:#5b6b82;
+  --glass:rgba(255,255,255,.6);
+  --glass-border:rgba(0,0,0,.10);
+  --glass-highlight:rgba(0,0,0,.04);
+  --shadow:0 8px 32px rgba(0,0,0,.12);
+  --focus:#4338ca;
 }
+
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
 body{
-  background:var(--bg-deep);color:var(--text-primary);
-  font-family:'Inter',system-ui,sans-serif;font-size:15px;
-  line-height:1.5;min-height:100vh;overflow-x:hidden;
+  background:var(--bg-deep);
+  color:var(--text-primary);
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  min-height:100vh;
+  overflow-x:hidden;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .3s,color .3s;
 }
 ::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--glass-border);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
 
-/* LOADER */
-#loader{position:fixed;inset:0;z-index:9999;background:var(--bg-deep);
+.skip-link{
+  position:absolute;left:-9999px;top:0;z-index:10000;
+  background:var(--accent);color:#0a0a1a;padding:.7rem 1.2rem;
+  border-radius:0 0 8px 0;font-weight:700;text-decoration:none;
+}
+.skip-link:focus{left:0}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+.sr-only{
+  position:absolute;width:1px;height:1px;padding:0;margin:-1px;
+  overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;
+}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+    scroll-behavior:auto !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOADER
+   ═══════════════════════════════════════════════════════════ */
+#loader{
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg-deep);
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity .6s,visibility .6s}
+  transition:opacity .9s ease,visibility .9s;
+}
 #loader.hidden{opacity:0;visibility:hidden;pointer-events:none}
-#loader-canvas{position:absolute;inset:0;width:100%;height:100%}
-.loader-content{position:relative;z-index:1;text-align:center;padding:1rem}
-.loader-brand{font-family:'Orbitron',sans-serif;font-size:clamp(1.9rem,7vw,4rem);
+#loader-canvas{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  display:block;
+}
+.loader-content{position:relative;z-index:1;text-align:center;padding:1rem;pointer-events:none}
+.loader-content .loader-custom{pointer-events:auto}
+.loader-brand{
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(1.9rem,7vw,4rem);
   font-weight:900;letter-spacing:.14em;
   background:linear-gradient(135deg,var(--text-primary),var(--accent));
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-.loader-sub{font-family:'Space Grotesk',sans-serif;font-size:.85rem;
-  color:var(--text-secondary);letter-spacing:.28em;text-transform:uppercase;margin-bottom:2rem}
-.loader-bar-track{width:min(280px,72vw);height:3px;background:var(--glass-border);
-  border-radius:3px;overflow:hidden;margin:0 auto}
-.loader-bar-fill{height:100%;width:0%;
-  background:linear-gradient(90deg,var(--accent-dark),var(--accent));transition:width .3s}
-.loader-status{font-family:'JetBrains Mono',monospace;font-size:.72rem;
-  color:var(--text-muted);margin-top:1rem;min-height:1.2em}
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent;
+  margin-bottom:.4rem;
+}
+.loader-sub{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:clamp(.7rem,1.8vw,.9rem);
+  color:var(--text-secondary);
+  letter-spacing:.28em;text-transform:uppercase;margin-bottom:2.5rem;
+}
+.loader-bar-track{
+  width:min(280px,72vw);height:3px;background:var(--glass-border);
+  border-radius:3px;overflow:hidden;margin:0 auto;
+}
+.loader-bar-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,var(--accent-dark),var(--accent));
+  transition:width .3s ease;
+}
+.loader-status{
+  font-family:'JetBrains Mono',monospace;
+  font-size:.72rem;color:var(--text-muted);
+  margin-top:1rem;letter-spacing:.06em;min-height:1.2em;
+}
+.loader-custom{
+  margin-top:1.8rem;display:flex;gap:.6rem;
+  align-items:center;justify-content:center;
+}
+.loader-custom label{font-size:.72rem;color:var(--text-muted)}
+.loader-custom input[type="color"]{
+  width:34px;height:34px;border:2px solid var(--glass-border);
+  border-radius:50%;padding:2px;background:transparent;cursor:pointer;
+}
+.loader-custom input[type="color"]::-webkit-color-swatch-wrapper{padding:0}
+.loader-custom input[type="color"]::-webkit-color-swatch{border:none;border-radius:50%}
 
-/* CINEMATIC */
-#cinematic-view{position:fixed;inset:0;z-index:100;opacity:0;visibility:hidden;
-  transition:opacity 1s,visibility 1s;cursor:pointer;background:#05060f;overflow:hidden}
+/* ═══════════════════════════════════════════════════════════
+   CINEMATIC VIEW
+   ═══════════════════════════════════════════════════════════ */
+#cinematic-view{
+  position:fixed;inset:0;z-index:100;
+  opacity:0;visibility:hidden;
+  transition:opacity 1.2s ease,visibility 1.2s;
+  cursor:pointer;background:var(--bg-deep);
+  overflow:hidden;
+}
 #cinematic-view.active{opacity:1;visibility:visible}
-#cinematic-canvas{position:absolute;inset:0;width:100%;height:100%;z-index:1}
-.cinematic-vignette{position:absolute;inset:0;z-index:2;pointer-events:none;
-  background:radial-gradient(ellipse at 50% 80%,transparent 0%,transparent 50%,rgba(10,10,26,.85) 92%)}
-.cinematic-ui{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;
-  align-items:center;padding-top:10vh;pointer-events:none}
-.cinematic-brand{font-family:'Orbitron',sans-serif;font-size:clamp(1.6rem,5.5vw,3.2rem);
-  font-weight:700;letter-spacing:.2em;text-shadow:0 0 40px rgba(129,140,248,.4)}
-.cinematic-tagline{font-family:'Space Grotesk',sans-serif;font-size:.9rem;
-  color:var(--text-secondary);letter-spacing:.42em;text-transform:uppercase;margin-top:.7rem}
-.cinematic-hint{position:absolute;bottom:8vh;left:50%;transform:translateX(-50%);z-index:4;
-  display:flex;flex-direction:column;align-items:center;gap:.7rem}
-.hint-pulse{width:52px;height:52px;border-radius:50%;border:2px solid var(--accent);
-  animation:pulse 2s infinite}
-.hint-text{font-family:'Space Grotesk',sans-serif;font-size:.75rem;
-  letter-spacing:.22em;color:var(--accent);text-transform:uppercase;font-weight:600}
-@keyframes pulse{0%{transform:scale(1);opacity:1}100%{transform:scale(1.7);opacity:0}}
+#cinematic-canvas{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  display:block;z-index:1;
+}
+.cinematic-vignette{
+  position:absolute;inset:0;z-index:2;pointer-events:none;
+  background:
+    radial-gradient(ellipse at 50% 80%,transparent 0%,transparent 50%,rgba(10,10,26,.85) 92%),
+    linear-gradient(to bottom,rgba(10,10,26,.35) 0%,transparent 28%,transparent 70%,rgba(10,10,26,.75) 100%);
+  transition:opacity .8s;
+}
+.cinematic-ui{
+  position:absolute;inset:0;z-index:3;
+  display:flex;flex-direction:column;align-items:center;
+  padding-top:10vh;pointer-events:none;transition:opacity .8s;
+}
+.cinematic-brand{
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(1.6rem,5.5vw,3.2rem);
+  font-weight:700;letter-spacing:.2em;
+  color:var(--text-primary);
+  text-shadow:0 0 40px var(--accent-glow);
+  opacity:0;transform:translateY(18px);
+  animation:fadeInUp 1s ease .4s forwards;
+}
+.cinematic-tagline{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:clamp(.68rem,1.8vw,.9rem);
+  color:var(--text-secondary);
+  letter-spacing:.42em;text-transform:uppercase;
+  margin-top:.7rem;text-align:center;padding:0 1rem;
+  opacity:0;animation:fadeInUp 1s ease .75s forwards;
+}
+.cinematic-hint{
+  position:absolute;bottom:8vh;left:50%;transform:translateX(-50%);
+  z-index:4;
+  display:flex;flex-direction:column;align-items:center;gap:.7rem;
+  opacity:0;animation:fadeInUp 1s ease 1.3s forwards;
+}
+.hint-pulse{
+  width:52px;height:52px;border-radius:50%;
+  border:2px solid var(--accent);position:relative;
+  animation:pulseRing 2.4s ease-out infinite;
+}
+.hint-pulse::after{
+  content:'';position:absolute;inset:14px;border-radius:50%;
+  background:var(--accent);opacity:.55;
+  animation:pulseCore 2.4s ease-out infinite;
+}
+.hint-text{
+  font-family:'Space Grotesk',sans-serif;
+  font-size:.75rem;letter-spacing:.22em;
+  color:var(--accent);text-transform:uppercase;font-weight:600;
+}
 
-/* DASHBOARD */
-#dashboard{display:none;grid-template-rows:auto 1fr;
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseRing{0%{transform:scale(1);opacity:1}100%{transform:scale(1.7);opacity:0}}
+@keyframes pulseCore{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(.78);opacity:1}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* ═══════════════════════════════════════════════════════════
+   DASHBOARD
+   ═══════════════════════════════════════════════════════════ */
+#dashboard{
+  display:none;
+  grid-template-rows:auto 1fr;
   grid-template-columns:minmax(300px,340px) minmax(0,1fr) minmax(300px,340px);
-  grid-template-areas:"header header header" "left globe right";
-  gap:1px;background:var(--bg-deep);min-height:100vh;width:100%}
-#dashboard.active{display:grid}
-
-.dash-header{grid-area:header;display:flex;align-items:center;justify-content:space-between;
-  gap:.6rem;flex-wrap:wrap;padding:.55rem .9rem;
-  background:rgba(10,10,26,.88);backdrop-filter:blur(20px);
-  border-bottom:1px solid var(--glass-border);position:sticky;top:0;z-index:30}
-.header-brand{font-family:'Orbitron',sans-serif;font-size:1rem;font-weight:700;
-  letter-spacing:.08em;display:flex;align-items:center;gap:.45rem}
-.header-actions{display:flex;align-items:center;gap:.35rem;flex-wrap:wrap}
-
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;
-  min-height:34px;padding:.35rem .8rem;border-radius:999px;
-  background:var(--glass);border:1px solid var(--glass-border);
-  color:var(--text-primary);font-family:'Space Grotesk',sans-serif;
-  font-size:.72rem;font-weight:600;cursor:pointer;white-space:nowrap;
-  transition:background .2s,border-color .2s;text-decoration:none}
-.btn:hover{border-color:var(--accent);background:var(--glass-highlight)}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#0a0a1a}
-.btn-primary:hover{background:var(--accent-dark);border-color:var(--accent-dark);color:#fff}
-.btn-icon-only{padding:.35rem;width:38px}
-
-.sidebar{padding:.75rem;display:flex;flex-direction:column;gap:.75rem;
-  overflow-y:auto;z-index:5;min-height:0}
-.sidebar-left{grid-area:left}
-.sidebar-right{grid-area:right}
-
-.panel{background:var(--glass);backdrop-filter:blur(18px);
-  border:1px solid var(--glass-border);border-radius:var(--radius);padding:.85rem}
-.panel-title{font-family:'Space Grotesk',sans-serif;font-size:.72rem;font-weight:700;
-  letter-spacing:.14em;text-transform:uppercase;color:var(--text-secondary);
-  display:flex;align-items:center;justify-content:space-between;gap:.5rem;margin-bottom:.6rem}
-.panel-title .rule{flex:1;height:1px;background:var(--glass-border)}
-
-.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
-.stat-card{background:var(--glass-highlight);border:1px solid var(--glass-border);
-  border-radius:10px;padding:.65rem .4rem;text-align:center}
-.stat-value{font-family:'Orbitron',sans-serif;font-size:1.45rem;font-weight:700;line-height:1.1}
-.stat-value.critical{color:var(--critical)}
-.stat-value.high{color:var(--high)}
-.stat-label{font-size:.62rem;color:var(--text-muted);
-  text-transform:uppercase;letter-spacing:.09em;margin-top:.25rem}
-
-.list{display:flex;flex-direction:column;gap:.45rem}
-.list-scroll{max-height:min(70vh,600px);overflow-y:auto;padding-right:.15rem}
-
-.item{width:100%;text-align:left;display:flex;gap:.6rem;align-items:flex-start;
-  background:var(--glass);border:1px solid var(--glass-border);
-  border-left:3px solid transparent;border-radius:10px;padding:.6rem .65rem;
-  font:inherit;color:inherit;cursor:pointer;transition:background .2s,transform .18s}
-.item:hover{background:var(--glass-highlight);transform:translateX(3px)}
-.item.critical{border-left-color:var(--critical)}
-.item.high{border-left-color:var(--high)}
-.item.medium{border-left-color:var(--medium)}
-.item.low{border-left-color:var(--low)}
-
-.item-main{flex:1;min-width:0}
-.item-top{display:flex;justify-content:space-between;align-items:flex-start;gap:.45rem}
-.item-title{font-size:.78rem;font-weight:600;line-height:1.35;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.item-meta{font-size:.63rem;color:var(--text-muted);display:flex;gap:.4rem;
-  align-items:center;flex-wrap:wrap;margin-top:.3rem;
-  font-family:'JetBrains Mono',monospace}
-.badge{font-size:.55rem;padding:.12rem .42rem;border-radius:5px;
-  font-weight:700;text-transform:uppercase;flex-shrink:0}
-.badge-critical{background:rgba(239,68,68,.18);color:var(--critical)}
-.badge-high{background:rgba(251,146,60,.18);color:var(--high)}
-.badge-medium{background:rgba(251,191,36,.18);color:var(--medium)}
-.badge-low{background:rgba(74,222,128,.18);color:var(--low)}
-.badge-cat{background:rgba(129,140,248,.14);color:var(--accent);
-  font-size:.55rem;padding:.1rem .4rem;border-radius:5px;
-  text-transform:uppercase;font-weight:700}
-
-.thumb{position:relative;flex:0 0 64px;width:64px;height:64px;border-radius:9px;
-  overflow:hidden;border:1px solid var(--glass-border);
-  background:linear-gradient(135deg,#1e293b,#0f172a);
-  display:flex;align-items:center;justify-content:center}
-.thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.thumb .thumb-emoji{font-size:1.6rem}
-
-.empty{padding:1.4rem .7rem;text-align:center;font-size:.75rem;
-  color:var(--text-muted);font-family:'JetBrains Mono',monospace;line-height:1.6}
-.empty.error{color:var(--high)}
-
-.globe-area{grid-area:globe;position:relative;overflow:hidden;min-height:0;background:#05060f}
-#globe-canvas{position:absolute;inset:0;width:100%;height:100%}
-#map-status{position:absolute;top:.7rem;left:.7rem;z-index:6;
-  background:rgba(10,10,26,.82);backdrop-filter:blur(12px);
-  border:1px solid var(--glass-border);border-radius:8px;
-  padding:.4rem .75rem;font-size:.68rem;color:var(--text-secondary);
-  font-family:'JetBrains Mono',monospace;pointer-events:none}
-
-/* MODAL */
-.modal-overlay{display:none;position:fixed;inset:0;z-index:2000;
-  background:rgba(0,0,0,.78);backdrop-filter:blur(8px);
-  align-items:center;justify-content:center;padding:1rem;overflow-y:auto}
-.modal-overlay.active{display:flex}
-.modal{position:relative;background:var(--bg-deep);
-  border:1px solid var(--glass-border);border-radius:16px;
-  padding:1.6rem;width:100%;max-width:720px;max-height:90vh;overflow-y:auto;
-  animation:modalIn .3s}
-@keyframes modalIn{from{opacity:0;transform:scale(.95) translateY(16px)}to{opacity:1;transform:none}}
-.modal h2{font-family:'Orbitron',sans-serif;font-size:1.15rem;
-  color:var(--text-primary);margin-bottom:.6rem;line-height:1.4}
-.modal-close{position:absolute;top:.8rem;right:.8rem;width:38px;height:38px;
-  border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);
-  color:var(--text-secondary);cursor:pointer;font-size:.9rem;z-index:10}
-.modal-close:hover{color:var(--critical);border-color:var(--critical)}
-
-.hero{position:relative;width:100%;height:280px;border-radius:12px;
-  overflow:hidden;margin-bottom:1rem;background:linear-gradient(135deg,#1e293b,#0f172a);
-  display:flex;align-items:center;justify-content:center}
-.hero img{width:100%;height:100%;object-fit:cover;display:block}
-.hero-emoji{font-size:4rem}
-.article-body{font-size:.92rem;color:var(--text-secondary);line-height:1.75}
-.article-body p{margin-bottom:.9rem}
-.article-body.loading{color:var(--text-muted);font-style:italic}
-
-#toast-container{position:fixed;top:74px;right:12px;z-index:3000;
-  display:flex;flex-direction:column;gap:.5rem;max-width:min(360px,calc(100vw - 24px))}
-.toast{background:rgba(10,10,26,.95);backdrop-filter:blur(20px);
-  border:1px solid var(--glass-border);border-left:4px solid var(--accent);
-  border-radius:10px;padding:.75rem .95rem;pointer-events:auto;
-  animation:toastIn .4s}
-@keyframes toastIn{from{opacity:0;transform:translateX(110%)}to{opacity:1;transform:none}}
-.toast-title{font-size:.82rem;font-weight:600;color:var(--text-primary)}
-.toast-meta{font-size:.65rem;color:var(--text-muted);margin-top:.2rem;
-  font-family:'JetBrains Mono',monospace}
-
-@media (max-width:1100px){
-  #dashboard{grid-template-columns:1fr;
-    grid-template-rows:auto 52vh auto auto;
-    grid-template-areas:"header" "globe" "left" "right"}
-  .sidebar{overflow:visible}
-  .list-scroll{max-height:none}
+  grid-template-areas:
+    "header header header"
+    "left   globe  right";
+  gap:1px;background:var(--bg-deep);
+  min-height:100vh;width:100%;
+  opacity:0;transition:opacity .8s ease;
 }
-@media (max-width:640px){
-  .dash-header{padding:.5rem .6rem}
-  .header-brand{font-size:.85rem}
-  .btn{min-height:40px;padding:.5rem .75rem}
-  .btn-icon-only{width:40px;height:40px}
-  #toast-container{top:auto;bottom:12px;left:12px;right:12px;max-width:none}
-}
-</style>
-</head>
-<body>
-
-<div id="loader" role="status">
-  <canvas id="loader-canvas"></canvas>
-  <div class="loader-content">
-    <div class="loader-brand">GCMS CORE X</div>
-    <div class="loader-sub">Global Crisis Monitor System</div>
-    <div class="loader-bar-track"><div class="loader-bar-fill" id="loader-bar"></div></div>
-    <div class="loader-status" id="loader-status">Initializing…</div>
-  </div>
-</div>
-
-<div id="cinematic-view" role="button" tabindex="0">
-  <canvas id="cinematic-canvas"></canvas>
-  <div class="cinematic-vignette"></div>
-  <div class="cinematic-ui">
-    <div class="cinematic-brand">GCMS CORE X</div>
-    <div class="cinematic-tagline">Real-time Global Crisis Intelligence</div>
-  </div>
-  <div class="cinematic-hint">
-    <div class="hint-pulse"></div>
-    <div class="hint-text">Tap to Access</div>
-  </div>
-</div>
-
-<div id="dashboard">
-  <header class="dash-header">
-    <div class="header-brand">
-      <span style="color:var(--accent)">◆</span>
-      <span>GCMS CORE X</span>
-      <span style="font-size:.55rem;color:var(--text-muted)">v7.0</span>
-    </div>
-    <div class="header-actions">
-      <span id="clock" style="font-family:'JetBrains Mono',monospace;
-        font-size:.65rem;color:var(--text-muted)">--:--:-- UTC</span>
-      <button class="btn btn-icon-only" id="theme-toggle" title="Toggle theme">🌓</button>
-      <button class="btn" id="refresh-btn" title="Refresh all">⟳ Refresh</button>
-    </div>
-  </header>
-
-  <aside class="sidebar sidebar-left">
-    <section class="panel">
-      <h2 class="panel-title">Crisis Overview <span class="rule"></span></h2>
-      <div class="stat-grid">
-        <div class="stat-card">
-          <div class="stat-value critical" id="stat-active">—</div>
-          <div class="stat-label">Active Events</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value high" id="stat-alerts">—</div>
-          <div class="stat-label">High / Critical</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-news">—</div>
-          <div class="stat-label">Headlines</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="stat-score">—</div>
-          <div class="stat-label">Crisis Index</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel" style="flex:1;min-height:0">
-      <h2 class="panel-title">Recent Events <span class="rule"></span>
-        <span id="ev-count" style="font-family:'JetBrains Mono',monospace;
-          font-size:.6rem;color:var(--text-muted)">0</span>
-      </h2>
-      <div class="list list-scroll" id="event-list"></div>
-    </section>
-  </aside>
-
-  <main class="globe-area">
-    <canvas id="globe-canvas"></canvas>
-    <div id="map-status">Initialising map…</div>
-  </main>
-
-  <aside class="sidebar sidebar-right">
-    <section class="panel" style="flex:1;min-height:0">
-      <h2 class="panel-title">Crisis News <span class="rule"></span>
-        <span id="news-count" style="font-family:'JetBrains Mono',monospace;
-          font-size:.6rem;color:var(--text-muted)">0</span>
-      </h2>
-      <div class="list list-scroll" id="news-feed" style="max-height:70vh"></div>
-    </section>
-  </aside>
-</div>
-
-<div class="modal-overlay" id="article-modal">
-  <div class="modal">
-    <button class="modal-close" id="article-close">✕</button>
-    <div id="article-hero"></div>
-    <div id="article-source" style="font-size:.7rem;color:var(--text-muted);
-      font-family:'JetBrains Mono',monospace;margin-bottom:.5rem"></div>
-    <h2 id="article-title"></h2>
-    <div id="article-body" class="article-body"></div>
-    <div style="display:flex;gap:.5rem;margin-top:1.2rem;flex-wrap:wrap">
-      <a class="btn btn-primary" id="article-open" target="_blank" rel="noopener noreferrer">Open on publisher ↗</a>
-    </div>
-  </div>
-</div>
-
-<div id="toast-container"></div>
-
-<script>
-'use strict';
-
-/* ═══════════════════════════════════════════════════════════════
-   GCMS CORE X — client-only resilient news reader
-   Layers:
-   1. Proxy race → fetch Google News RSS through 4 free proxies
-   2. Parse RSS → extract title, link, image, source, pubDate
-   3. Click a card → try Jina Reader (r.jina.ai) for full text
-   4. If Jina fails → try direct (rare) → else show link only
-   5. If RSS completely fails → curated fallback headlines
-   ═══════════════════════════════════════════════════════════════ */
-
-const $ = id => document.getElementById(id);
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-const esc = v => String(v ?? '').replace(/[&<>"']/g, c => (
-  {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
-));
-const timeAgo = ts => {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (!Number.isFinite(s) || s < 0) return 'just now';
-  if (s < 60) return 'just now';
-  if (s < 3600) return Math.floor(s/60) + 'm ago';
-  if (s < 86400) return Math.floor(s/3600) + 'h ago';
-  return Math.floor(s/86400) + 'd ago';
-};
-
-/* ═══════════════ PROXY RACE ═══════════════
-   Race 4 free CORS proxies in parallel. First one to return
-   readable text within 8 seconds wins. */
-const PROXIES = [
-  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-  u => 'https://corsproxy.io/?url=' + encodeURIComponent(u),
-  u => 'https://api.codetabs.com/v1/proxy/?quest=' + encodeURIComponent(u),
-  u => 'https://cors.eu.org/' + u
-];
-
-async function fetchThroughRace(url, timeoutMs = 9000) {
-  const attempts = PROXIES.map(async (buildUrl, i) => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(buildUrl(url), {
-        signal: ctrl.signal,
-        referrerPolicy: 'no-referrer'
-      });
-      clearTimeout(timer);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const text = await res.text();
-      if (!text || text.length < 100) throw new Error('empty');
-      console.log(`[proxy ${i}] ✓ ${url.slice(0,60)}… (${text.length}b)`);
-      return text;
-    } catch (e) {
-      clearTimeout(timer);
-      console.log(`[proxy ${i}] ✗ ${e.message}`);
-      throw e;
-    }
-  });
-
-  try {
-    return await Promise.any(attempts);
-  } catch {
-    throw new Error('all proxies failed');
-  }
-}
-
-/* ═══════════════ RSS FETCH ═══════════════ */
-const FEEDS = [
-  'https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en',
-  'https://news.google.com/rss/search?q=conflict+OR+earthquake+OR+flood+OR+war&hl=en-US&gl=US&ceid=US:en',
-  'https://news.google.com/rss/search?q=crisis+OR+humanitarian+OR+refugee&hl=en-US&gl=US&ceid=US:en'
-];
-
-function parseRss(xml) {
-  const doc = new DOMParser().parseFromString(xml, 'text/xml');
-  if (doc.querySelector('parsererror')) return [];
-  const items = doc.querySelectorAll('item');
-  const out = [];
-  items.forEach(item => {
-    const title = (item.querySelector('title')?.textContent || '').trim();
-    if (title.length < 12) return;
-    const link = (item.querySelector('link')?.textContent || '').trim();
-    if (!link) return;
-    const pubDate = item.querySelector('pubDate')?.textContent || '';
-    const source = (item.querySelector('source')?.textContent || 'Google News').trim();
-    /* Images: <media:content url="..."> or <enclosure url="..."> */
-    let image = null;
-    const media = item.getElementsByTagName('media:content')[0]
-      || item.getElementsByTagName('enclosure')[0];
-    if (media) image = media.getAttribute('url') || null;
-    out.push({
-      title: title.replace(/&amp;/g, '&').replace(/&#39;/g, "'").trim(),
-      url: link,
-      source,
-      time: pubDate ? new Date(pubDate).getTime() : Date.now(),
-      image
-    });
-  });
-  return out;
-}
-
-async function loadNews() {
-  const seen = new Set();
-  const all = [];
-
-  /* Try each feed through the proxy race */
-  for (const feed of FEEDS) {
-    try {
-      const xml = await fetchThroughRace(feed);
-      const items = parseRss(xml);
-      items.forEach(it => {
-        const key = it.title.toLowerCase().slice(0, 60);
-        if (seen.has(key)) return;
-        seen.add(key);
-        all.push(it);
-      });
-      if (all.length >= 30) break;
-    } catch (e) {
-      console.warn('[feed fail]', feed, e.message);
-    }
-  }
-
-  all.sort((a, b) => b.time - a.time);
-
-  if (!all.length) {
-    console.warn('[news] all feeds failed — using fallback list');
-    return FALLBACK_NEWS.map((n, i) => ({ ...n, time: Date.now() - i * 3600000 }));
-  }
-  return all.slice(0, 40);
-}
-
-/* Curated fallback headlines if every feed fails */
-const FALLBACK_NEWS = [
-  { title: 'UN agencies warn of growing humanitarian needs across multiple crisis regions', source: 'UN News', url: 'https://news.un.org/en/', image: null },
-  { title: 'ReliefWeb reports active disasters affecting millions worldwide', source: 'ReliefWeb', url: 'https://reliefweb.int/updates', image: null },
-  { title: 'USGS monitors elevated seismic activity across the Pacific ring of fire', source: 'USGS', url: 'https://earthquake.usgs.gov/earthquakes/map/', image: null },
-  { title: 'International monitors flag escalating conflict in multiple regions', source: 'Reuters', url: 'https://www.reuters.com/world/', image: null },
-  { title: 'Climate scientists report record temperatures across multiple continents', source: 'BBC News', url: 'https://www.bbc.com/news', image: null },
-  { title: 'Health agencies track evolving disease outbreaks in several countries', source: 'WHO', url: 'https://www.who.int/emergencies/disease-outbreak-news', image: null },
-  { title: 'UNHCR updates displacement figures as refugee flows shift across borders', source: 'UNHCR', url: 'https://www.unhcr.org/news', image: null },
-  { title: 'Aid convoys reach conflict-affected areas after negotiated pause', source: 'ICRC', url: 'https://www.icrc.org/en/news', image: null },
-  { title: 'Economists flag supply chain pressures from regional instability', source: 'AP News', url: 'https://apnews.com/hub/world-news', image: null },
-  { title: 'Global monitoring networks track flooding and storm systems in real time', source: 'GDACS', url: 'https://www.gdacs.org/', image: null },
-  { title: 'Diplomatic efforts intensify as regional tensions continue', source: 'Al Jazeera', url: 'https://www.aljazeera.com/', image: null },
-  { title: 'Maritime authorities respond to incidents affecting key shipping routes', source: 'Maritime Executive', url: 'https://www.maritime-executive.com/', image: null }
-];
-
-/* ═══════════════ USGS EVENTS ═══════════════ */
-async function loadEvents() {
-  try {
-    const xml = await fetchThroughRace(
-      'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_week.geojson'
-    );
-    const data = JSON.parse(xml);
-    return (data.features || []).map(f => {
-      const c = f.geometry?.coordinates || [];
-      const mag = Number(f.properties?.mag) || 0;
-      return {
-        id: 'usgs-' + f.id,
-        title: f.properties?.title || `M${mag.toFixed(1)} earthquake`,
-        severity: mag >= 6.5 ? 'critical' : mag >= 5.5 ? 'high' : mag >= 4.5 ? 'medium' : 'low',
-        time: Number(f.properties?.time) || Date.now(),
-        lat: c[1] ?? null, lon: c[0] ?? null,
-        place: f.properties?.place || null,
-        source: 'USGS',
-        url: f.properties?.url || null
-      };
-    });
-  } catch (e) {
-    console.warn('[usgs fail]', e.message);
-    return [];
-  }
-}
-
-/* ═══════════════ JINA READER — full article text ═══════════════
-   r.jina.ai is a free service that runs a headless browser
-   and returns clean article text. No CORS problem because it's
-   a public service that returns CORS headers. */
-async function fetchArticleViaJina(url) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20000);
-  try {
-    const res = await fetch('https://r.jina.ai/' + url, {
-      signal: ctrl.signal,
-      headers: { 'Accept': 'text/plain' }
-    });
-    clearTimeout(timer);
-    if (!res.ok) throw new Error('Jina HTTP ' + res.status);
-    const text = await res.text();
-    if (!text || text.length < 200) throw new Error('Jina empty');
-    console.log('[jina] ✓', url.slice(0,60), text.length + 'b');
-    return text;
-  } catch (e) {
-    clearTimeout(timer);
-    console.warn('[jina] ✗', e.message);
-    throw e;
-  }
-}
-
-/* ═══════════════ STATE ═══════════════ */
-const state = { events: [], news: [] };
-
-/* ═══════════════ CATEGORY THEME ═══════════════ */
-const CAT_THEME = {
-  Conflict:  { c1: '#ef4444', c2: '#450a0a', emoji: '⚔️' },
-  Disaster:  { c1: '#0ea5e9', c2: '#0c4a6e', emoji: '🌊' },
-  Health:    { c1: '#22c55e', c2: '#052e16', emoji: '🦠' },
-  Climate:   { c1: '#f59e0b', c2: '#431407', emoji: '🌡️' },
-  Politics:  { c1: '#818cf8', c2: '#1e1b4b', emoji: '🏛️' },
-  Economy:   { c1: '#eab308', c2: '#422006', emoji: '📉' },
-  World:     { c1: '#38bdf8', c2: '#0c4a6e', emoji: '🌍' }
-};
-function categorize(title) {
-  const t = String(title || '');
-  if (/earthquake|flood|hurricane|wildfire|tsunami|volcano|storm|disaster/i.test(t)) return 'Disaster';
-  if (/war|conflict|airstrike|missile|troops|invasion|ceasefire|attack/i.test(t)) return 'Conflict';
-  if (/virus|covid|outbreak|epidemic|vaccine|disease|hospital/i.test(t)) return 'Health';
-  if (/climate|warming|emission|glacier/i.test(t)) return 'Climate';
-  if (/election|parliament|sanction|summit|treaty|vote|protest/i.test(t)) return 'Politics';
-  if (/market|inflation|recession|gdp|currency|stock/i.test(t)) return 'Economy';
-  return 'World';
-}
-
-/* ═══════════════ THUMBNAIL ═══════════════ */
-function thumbHtml(item) {
-  const theme = CAT_THEME[categorize(item.title)] || CAT_THEME.World;
-  if (item.image) {
-    return `<span class="thumb" style="background:linear-gradient(135deg,${theme.c2},${theme.c1})">
-      <img src="${esc(item.image)}" alt="" loading="lazy"
-        onerror="this.parentElement.innerHTML='<span class=&quot;thumb-emoji&quot;>${theme.emoji}</span>'">
-    </span>`;
-  }
-  return `<span class="thumb" style="background:linear-gradient(135deg,${theme.c2},${theme.c1})">
-    <span class="thumb-emoji">${theme.emoji}</span>
-  </span>`;
-}
-
-/* ═══════════════ RENDER ═══════════════ */
-function renderEvents() {
-  const c = $('event-list');
-  if (!c) return;
-  if (!state.events.length) {
-    c.innerHTML = `<div class="empty">◌ No events available.</div>`;
-    return;
-  }
-  c.innerHTML = state.events.slice(0, 15).map((e, i) => `
-    <button class="item ${esc(e.severity)}" data-ev-index="${i}">
-      <span class="item-main">
-        <span class="item-top">
-          <span class="item-title">${esc(e.title)}</span>
-          <span class="badge badge-${esc(e.severity)}">${esc(e.severity)}</span>
-        </span>
-        <span class="item-meta">
-          <span>${esc(e.source)}</span> · <span>${timeAgo(e.time)}</span>
-          ${e.place ? `· <span>${esc(e.place)}</span>` : ''}
-        </span>
-      </span>
-    </button>
-  `).join('');
-}
-
-function renderNews() {
-  const c = $('news-feed');
-  if (!c) return;
-  if (!state.news.length) {
-    c.innerHTML = `<div class="empty error">⚠ No headlines.<br>Press ⟳ Refresh.</div>`;
-    return;
-  }
-  c.innerHTML = state.news.slice(0, 30).map((n, i) => `
-    <button class="item" data-news-index="${i}">
-      ${thumbHtml(n)}
-      <span class="item-main">
-        <span class="item-top">
-          <span class="item-title">${esc(n.title)}</span>
-        </span>
-        <span class="item-meta">
-          <span>${esc(n.source)}</span> · <span>${timeAgo(n.time)}</span>
-          · <span class="badge-cat">${esc(categorize(n.title))}</span>
-        </span>
-      </span>
-    </button>
-  `).join('');
-}
-
-function renderStats() {
-  const critical = state.events.filter(e => e.severity === 'critical' || e.severity === 'high').length;
-  const score = Math.min(100, Math.round(state.events.length * 0.5 + critical * 3));
-  $('stat-active').textContent = state.events.length || '—';
-  $('stat-alerts').textContent = critical || '—';
-  $('stat-news').textContent = state.news.length || '—';
-  $('stat-score').textContent = score || '—';
-  $('ev-count').textContent = state.events.length;
-  $('news-count').textContent = state.news.length;
-}
-
-/* ═══════════════ TOAST ═══════════════ */
-function toast(title, sub, kind = 'low') {
-  const c = $('toast-container');
-  const colors = { critical: 'var(--critical)', high: 'var(--high)', low: 'var(--accent)' };
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.style.borderLeftColor = colors[kind] || colors.low;
-  t.innerHTML = `<div class="toast-title">${esc(title)}</div>${sub ? `<div class="toast-meta">${esc(sub)}</div>` : ''}`;
-  c.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 6000);
-}
-
-/* ═══════════════ ARTICLE MODAL ═══════════════ */
-async function openArticle(item) {
-  const modal = $('article-modal');
-  modal.classList.add('active');
-  const theme = CAT_THEME[categorize(item.title)] || CAT_THEME.World;
-
-  $('article-hero').innerHTML = item.image
-    ? `<div class="hero" style="background:linear-gradient(135deg,${theme.c2},${theme.c1})">
-        <img src="${esc(item.image)}" alt=""
-          onerror="this.parentElement.innerHTML='<span class=&quot;hero-emoji&quot;>${theme.emoji}</span>'">
-      </div>`
-    : `<div class="hero" style="background:linear-gradient(135deg,${theme.c2},${theme.c1})">
-        <span class="hero-emoji">${theme.emoji}</span>
-      </div>`;
-
-  $('article-source').textContent = `${item.source} · ${timeAgo(item.time)}`;
-  $('article-title').textContent = item.title;
-  $('article-open').href = item.url;
-
-  const bodyEl = $('article-body');
-  bodyEl.className = 'article-body loading';
-  bodyEl.innerHTML = 'Fetching full article text via Jina Reader…';
-
-  /* Try Jina Reader first */
-  try {
-    const text = await fetchArticleViaJina(item.url);
-    bodyEl.className = 'article-body';
-
-    /* Jina returns markdown. Extract plain paragraphs. */
-    const cleaned = text
-      /* Remove "Title:", "URL Source:" metadata header that Jina adds */
-      .replace(/^Title:.*$/m, '')
-      .replace(/^URL Source:.*$/m, '')
-      .replace(/^Markdown Content:\s*$/m, '')
-      .trim();
-
-    const paragraphs = cleaned
-      .split(/\n{2,}/)
-      .map(p => p.replace(/^#+\s*/, '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim())
-      .filter(p => p.length > 60 && !/^!\[/.test(p));
-
-    if (paragraphs.length) {
-      bodyEl.innerHTML = paragraphs.slice(0, 25).map(p => `<p>${esc(p)}</p>`).join('');
-    } else {
-      /* Jina returned something but no clean paragraphs — show raw text */
-      bodyEl.innerHTML = cleaned.split('\n').filter(l => l.trim().length > 40)
-        .slice(0, 25).map(l => `<p>${esc(l.trim())}</p>`).join('');
-    }
-  } catch (err) {
-    bodyEl.className = 'article-body';
-    bodyEl.innerHTML = `
-      <p>Couldn't load the article body inline (the publisher may be blocking readers).</p>
-      <p><a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer" style="color:var(--accent)">Open on ${esc(item.source)} ↗</a></p>
-    `;
-  }
-}
-
-/* ═══════════════ THREE.JS — LOADER GLOBE ═══════════════ */
-function makeLoaderGlobe(canvas) {
-  if (typeof THREE === 'undefined') return null;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(60, 1, 0.1, 1000);
-  cam.position.z = 5.6;
-  const wire = new THREE.LineSegments(
-    new THREE.WireframeGeometry(new THREE.IcosahedronGeometry(2, 2)),
-    new THREE.LineBasicMaterial({ color: 0x818cf8, transparent: true, opacity: 0.45 })
-  );
-  scene.add(wire);
-  const pPos = new Float32Array(1200 * 3);
-  for (let i = 0; i < pPos.length; i++) pPos[i] = (Math.random() - 0.5) * 16;
-  const particles = new THREE.Points(
-    new THREE.BufferGeometry().setAttribute('position',
-      new THREE.BufferAttribute(pPos, 3)),
-    new THREE.PointsMaterial({ size: 0.028, color: 0x818cf8, transparent: true, opacity: 0.55 })
-  );
-  scene.add(particles);
-  let raf, on = false;
-  function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    cam.aspect = w / h; cam.updateProjectionMatrix();
-  }
-  function frame() {
-    if (!on) return;
-    wire.rotation.y += 0.004; wire.rotation.x += 0.0015;
-    particles.rotation.y += 0.0006;
-    renderer.render(scene, cam);
-    raf = requestAnimationFrame(frame);
-  }
-  return {
-    start() { if (on) return; on = true; resize(); frame(); },
-    stop() { on = false; if (raf) cancelAnimationFrame(raf); }
-  };
-}
-
-/* ═══════════════ THREE.JS — CINEMATIC EARTH ═══════════════ */
-function makeCinematicEarth(canvas) {
-  if (typeof THREE === 'undefined') return null;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-
-  const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(45, 1, 0.1, 2000);
-  cam.position.set(0, 0.9, 3.1);
-  cam.lookAt(0, 0, 0);
-
-  const sPos = new Float32Array(1500 * 3);
-  for (let i = 0; i < sPos.length; i++) sPos[i] = (Math.random() - 0.5) * 200;
-  scene.add(new THREE.Points(
-    new THREE.BufferGeometry().setAttribute('position',
-      new THREE.BufferAttribute(sPos, 3)),
-    new THREE.PointsMaterial({ color: 0xffffff, size: 0.22, transparent: true, opacity: 0.65 })
-  ));
-
-  const earthGroup = new THREE.Group();
-  scene.add(earthGroup);
-
-  const earthMat = new THREE.MeshPhongMaterial({
-    color: 0x1b2a4a,
-    specular: new THREE.Color(0x0a0a12),
-    shininess: 8,
-    emissive: new THREE.Color(0x060a18),
-    emissiveIntensity: 0.3
-  });
-  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(1, 64, 64), earthMat));
-
-  earthGroup.add(new THREE.Mesh(
-    new THREE.SphereGeometry(1.045, 48, 48),
-    new THREE.MeshPhongMaterial({
-      color: 0x4f6dff, transparent: true, opacity: 0.08,
-      side: THREE.BackSide, depthWrite: false
-    })
-  ));
-
-  scene.add(new THREE.AmbientLight(0x2a3358, 0.55));
-  const key = new THREE.DirectionalLight(0xffffff, 1.35);
-  key.position.set(5, 3, 5);
-  scene.add(key);
-  const rim = new THREE.DirectionalLight(0x818cf8, 0.45);
-  rim.position.set(-5, -1, -4);
-  scene.add(rim);
-
-  const loader = new THREE.TextureLoader();
-  if (loader.setCrossOrigin) loader.setCrossOrigin('anonymous');
-  const urls = [
-    'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://unpkg.com/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://raw.githubusercontent.com/mrdoob/three.js/r128/examples/textures/planets/earth_atmos_2048.jpg'
-  ];
-  let idx = 0;
-  (function tryLoad() {
-    const url = urls[idx];
-    console.log('[earth] loading', url);
-    loader.load(url,
-      tex => {
-        console.log('[earth] ✓', url);
-        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
-        tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1);
-        earthMat.map = tex;
-        earthMat.color.set(0xffffff);
-        earthMat.emissive.set(0x000000);
-        earthMat.emissiveIntensity = 0;
-        earthMat.needsUpdate = true;
-      },
-      undefined,
-      () => {
-        idx++;
-        if (idx < urls.length) tryLoad();
-        else console.warn('[earth] all texture CDNs failed');
-      }
-    );
-  })();
-
-  let raf, on = false;
-  function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    cam.aspect = w / h; cam.updateProjectionMatrix();
-  }
-  function frame() {
-    if (!on) return;
-    earthGroup.rotation.y += 0.0016;
-    renderer.render(scene, cam);
-    raf = requestAnimationFrame(frame);
-  }
-  return {
-    start() { if (on) return; on = true; resize(); frame(); },
-    stop() { on = false; if (raf) cancelAnimationFrame(raf); }
-  };
-}
-
-/* ═══════════════ 2D FALLBACK MAP (Leaflet) ═══════════════ */
-let leafletMap = null;
-function initLeaflet() {
-  if (leafletMap || typeof L === 'undefined') return;
-  const container = $('globe-canvas');
-  /* Replace canvas with a div for leaflet */
-  const div = document.createElement('div');
-  div.id = 'leaflet-fallback';
-  div.style.cssText = 'position:absolute;inset:0;width:100%;height:100%';
-  container.parentElement.replaceChild(div, container);
-
-  leafletMap = L.map(div, { center: [20, 10], zoom: 2, minZoom: 2, worldCopyJump: true });
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO', subdomains: 'abcd', maxZoom: 19
-  }).addTo(leafletMap);
-  syncLeafletMarkers();
-  $('map-status').textContent = '2D map · ' + state.events.filter(e => e.lat != null).length + ' plotted';
-}
-function syncLeafletMarkers() {
-  if (!leafletMap) return;
-  const colors = { critical: '#ef4444', high: '#fb923c', medium: '#fbbf24', low: '#4ade80' };
-  state.events.forEach(ev => {
-    if (ev.lat == null || ev.lon == null) return;
-    L.circleMarker([ev.lat, ev.lon], {
-      radius: ev.severity === 'critical' ? 8 : 5,
-      fillColor: colors[ev.severity] || '#4ade80',
-      color: '#fff', weight: 1, fillOpacity: 0.75
-    }).bindPopup(`<b>${esc(ev.title)}</b><br><small>${esc(ev.source)} · ${esc(ev.severity)}</small>`)
-      .addTo(leafletMap);
-  });
-}
-
-/* ═══════════════ DASHBOARD GLOBE (Three.js, low-detail) ═══════════════ */
-function makeDashboardGlobe(canvas) {
-  if (typeof THREE === 'undefined') return null;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
-
-  const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
-  cam.position.set(0, 0, 3.4);
-
-  const earthMat = new THREE.MeshPhongMaterial({ color: 0x1b2a4a, shininess: 5 });
-  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 48), earthMat);
-  scene.add(earth);
-
-  scene.add(new THREE.AmbientLight(0x2a3358, 0.6));
-  const key = new THREE.DirectionalLight(0xffffff, 1.2);
-  key.position.set(5, 3, 5);
-  scene.add(key);
-  const rim = new THREE.DirectionalLight(0x818cf8, 0.4);
-  rim.position.set(-5, -1, -4);
-  scene.add(rim);
-
-  const loader = new THREE.TextureLoader();
-  if (loader.setCrossOrigin) loader.setCrossOrigin('anonymous');
-  const urls = [
-    'https://threejs.org/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://unpkg.com/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg',
-    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/textures/planets/earth_atmos_2048.jpg'
-  ];
-  let idx = 0;
-  (function tryLoad() {
-    loader.load(urls[idx],
-      tex => {
-        if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
-        earthMat.map = tex; earthMat.color.set(0xffffff); earthMat.needsUpdate = true;
-      },
-      undefined,
-      () => { idx++; if (idx < urls.length) tryLoad(); }
-    );
-  })();
-
-  /* Markers */
-  const markerGroup = new THREE.Group();
-  scene.add(markerGroup);
-  function latLonToVec(lat, lon, r) {
-    const phi = (90 - lat) * Math.PI / 180;
-    const theta = (lon + 180) * Math.PI / 180;
-    return new THREE.Vector3(
-      -r * Math.sin(phi) * Math.cos(theta),
-       r * Math.cos(phi),
-       r * Math.sin(phi) * Math.sin(theta)
-    );
-  }
-  const colors = { critical: 0xef4444, high: 0xfb923c, medium: 0xfbbf24, low: 0x4ade80 };
-  function syncMarkers(events) {
-    while (markerGroup.children.length) {
-      const c = markerGroup.children.pop();
-      c.geometry?.dispose?.(); c.material?.dispose?.();
-    }
-    events.forEach(ev => {
-      if (ev.lat == null || ev.lon == null) return;
-      const pos = latLonToVec(ev.lat, ev.lon, 1.005);
-      const dot = new THREE.Mesh(
-        new THREE.SphereGeometry(ev.severity === 'critical' ? 0.025 : 0.016, 8, 8),
-        new THREE.MeshBasicMaterial({ color: colors[ev.severity] || 0x4ade80 })
-      );
-      dot.position.copy(pos);
-      markerGroup.add(dot);
-    });
-  }
-  syncMarkers(state.events);
-
-  let raf, on = false;
-  function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w || !h) return;
-    renderer.setSize(w, h, false);
-    cam.aspect = w / h; cam.updateProjectionMatrix();
-  }
-  function frame() {
-    if (!on) return;
-    earth.rotation.y += 0.0015;
-    markerGroup.rotation.y += 0.0015;
-    renderer.render(scene, cam);
-    raf = requestAnimationFrame(frame);
-  }
-  return {
-    start() { if (on) return; on = true; resize(); frame(); },
-    stop() { on = false; if (raf) cancelAnimationFrame(raf); },
-    syncMarkers
-  };
-}
-
-/* ═══════════════ CLICK HANDLING ═══════════════ */
-document.addEventListener('click', e => {
-  const newsBtn = e.target.closest('[data-news-index]');
-  if (newsBtn) {
-    const i = +newsBtn.dataset.newsIndex;
-    if (state.news[i]) openArticle(state.news[i]);
-    return;
-  }
-  const evBtn = e.target.closest('[data-ev-index]');
-  if (evBtn) {
-    const ev = state.events[+evBtn.dataset.evIndex];
-    if (ev && ev.url) window.open(ev.url, '_blank', 'noopener');
-    return;
-  }
-  if (e.target.id === 'article-close' || e.target.id === 'article-modal') {
-    $('article-modal').classList.remove('active');
-  }
-  if (e.target.id === 'theme-toggle') {
-    const cur = document.documentElement.getAttribute('data-theme');
-    document.documentElement.setAttribute('data-theme', cur === 'light' ? 'dark' : 'light');
-  }
-  if (e.target.id === 'refresh-btn') {
-    refreshAll();
-  }
-});
-
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') $('article-modal').classList.remove('active');
-});
-
-/* ═══════════════ REFRESH ═══════════════ */
-let dashboardGlobe = null;
-async function refreshAll() {
-  toast('Refreshing…', 'Racing proxies for live news', 'low');
-  const [news, events] = await Promise.allSettled([loadNews(), loadEvents()]);
-  if (news.status === 'fulfilled') state.news = news.value;
-  if (events.status === 'fulfilled') state.events = events.value;
-  renderNews(); renderEvents(); renderStats();
-  if (dashboardGlobe) dashboardGlobe.syncMarkers(state.events);
-  toast('Refreshed', `${state.news.length} headlines · ${state.events.length} events`, 'low');
-}
-
-/* ═══════════════ CLOCK ═══════════════ */
-function tickClock() {
-  const el = $('clock');
-  if (el) el.textContent = new Date().toISOString().slice(11, 19) + ' UTC';
-}
-setInterval(tickClock, 1000);
-
-/* ═══════════════ INIT ═══════════════ */
-async function init() {
-  const loaderGlobe = makeLoaderGlobe($('loader-canvas'));
-  loaderGlobe?.start();
-
-  const setLoader = (pct, msg) => {
-    const b = $('loader-bar'); if (b) b.style.width = pct + '%';
-    const s = $('loader-status'); if (s) s.textContent = msg;
-  };
-
-  setLoader(15, 'Racing proxies for live headlines…');
-  const newsP = loadNews();
-  setLoader(50, 'Fetching seismic events…');
-  const evP = loadEvents();
-
-  const [newsRes, evRes] = await Promise.allSettled([newsP, evP]);
-  state.news = newsRes.status === 'fulfilled' ? newsRes.value : FALLBACK_NEWS.map((n, i) => ({ ...n, time: Date.now() - i * 3600000 }));
-  state.events = evRes.status === 'fulfilled' ? evRes.value : [];
-
-  setLoader(100, 'System ready');
-  await sleep(300);
-  loaderGlobe?.stop();
-  $('loader').classList.add('hidden');
-
-  const cinematic = $('cinematic-view');
-  cinematic.classList.add('active');
-  const earth = makeCinematicEarth($('cinematic-canvas'));
-  earth?.start();
-
-  const enter = () => {
-    cinematic.removeEventListener('click', enter);
-    cinematic.removeEventListener('touchstart', enter);
-    cinematic.removeEventListener('keydown', onKey);
-    cinematic.classList.remove('active');
-    earth?.stop();
-    $('dashboard').classList.add('active');
-    void $('dashboard').offsetHeight;
-    setTimeout(() => {
-      const canvas = $('globe-canvas');
-      if (canvas && typeof THREE !== 'undefined') {
-        dashboardGlobe = makeDashboardGlobe(canvas);
-        dashboardGlobe?.start();
-        $('map-status').textContent = '3D globe · live';
-      } else {
-        initLeaflet();
-      }
-    }, 200);
-    tickClock();
-    renderNews(); renderEvents(); renderStats();
-    toast('System online', `${state.news.length} headlines · ${state.events.length} events`, 'low');
-  };
-  const onKey = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); enter(); } };
-  cinematic.addEventListener('click', enter);
-  cinematic.addEventListener('touchstart', enter, { passive: true });
-  cinematic.addEventListener('keydown', onKey);
-}
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-else init();
-</script>
-</body>
-</html>
+#dashboard.active{display:grid;opacity:1}
+
+.dash-header{
+  grid-area:header;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:.6rem;flex-wrap:wrap;
+  padding:.55rem .9rem;
+  background:var(--bg-header);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--glass-border);
+  position:sticky;top:0;z
